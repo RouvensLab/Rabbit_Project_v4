@@ -1,0 +1,10 @@
+numpy
+stable_baselines3
+tensorboard
+tensorboard-data-server
+torch==2.4.0+cu124
+torchaudio==2.4.0+cu124
+torchsummary==1.5.1
+torchvision==0.19.0+cu124
+torchviz==0.0.2
+pybullet
