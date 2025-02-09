@@ -1,0 +1,9 @@
+<launch>
+
+<rosparam file="$(find URDF_description)/launch/controller.yaml" command="load"/>
+<node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" ns="URDF" args="Umdrehung 1_position_controller Umdrehung 2_position_controller Umdrehung 3_position_controller Umdrehung 4_position_controller Umdrehung 8_position_controller Umdrehung 9_position_controller Umdrehung 10_position_controller Umdrehung 11_position_controller Umdrehung 12_position_controller Umdrehung 13_position_controller Umdrehung 14_position_controller Umdrehung 15_position_controller joint_state_controller "/>
+<node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen">
+  <remap from="/joint_states" to="/URDF/joint_states"/>
+</node>
+
+</launch>

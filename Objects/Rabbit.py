@@ -1,18 +1,26 @@
 import numpy as np
-
+from collections import deque
 import math
 import pybullet as p
 
 class Rabbit:
-    def __init__(self, URDF_path, init_pos= [0, 0, 0]):
-        self._id = p.loadURDF(URDF_path, init_pos[0], init_pos[1], init_pos[2])
+    """A class to represent a rabbit in the simulation
+    """
+    
+    def __init__(self, init_pos= [0, 0, 0]):
+        self.URDF_path = r"URDFs\Roh_Rabbit_v4_description\urdf\Roh_Rabbit_v4.xacro"
+        self._id = p.loadURDF(self.URDF_path, init_pos[0], init_pos[1], init_pos[2])
         self.init_pos = init_pos
-        self.URDF_path = URDF_path  
 
         #UserControlPanel_added
         self.UserControlPanel_added = True
         self.UserSlider = []
-        self.hung = True
+        self.hung = False
+
+        #Install the camera with the acceleration and orientation sensors at the head of the rabbit
+        self.Camera_Link_id = 19
+        self.worldLinkLinearVelocity_last = [0,0,0]
+
 
         #get the names of the joints
         self.Motors_index = [0, 1,  15, 16,    9, 13,   5, 3,    21, 20] #this are all the motors of the rabbit that can be controlled and read out. In the preferred order. !!!!
@@ -21,7 +29,7 @@ class Rabbit:
         self.numMotors = len(self.Motors_index)
 
         #when there are other physical properties for the motors, they can be set here
-        self.MAXFORCE = 3  #2.9#2.941995#5#in Newton   3 N/m
+        self.MAXFORCE = 10  #2.9#2.941995#5#in Newton   3 N/m
         self.MAXVELOCITY = 4.65#(2*math.pi)/(0.222*6)#in rad/s
         self.Motors_strength = [self.MAXFORCE for i in range(self.numMotors)]
         self.Motors_velocity = [self.MAXVELOCITY for i in range(self.numMotors)]
@@ -31,10 +39,28 @@ class Rabbit:
         #print("joint_ranges:", self.joint_ranges)
         self.numJoints = p.getNumJoints(self._id)
 
-        #enableJointForceTorqueSensor
-        # for joint in self.Motors_index:
-        #     p.enableJointForceTorqueSensor(self._id, joint, enableSensor=True)
+        self.Motors_range = [p.getJointInfo(self._id, i)[8:10] for i in self.Motors_index]
 
+        #enableJointForceTorqueSensor
+        for joint in self.Motors_index:
+            p.enableJointForceTorqueSensor(self._id, joint, enableSensor=True)
+
+        #set the robots lateral_friction to 1
+        #print("lateralFriction of Robot: ", p.getDynamicsInfo(self.rabbit.id, -1)[1])
+        p.changeDynamics(self._id, -1, 
+                         lateralFriction=1,
+                         jointDamping=0.1  # Damping for compliance
+                         )
+        
+        #allow collision between the links of the robot
+        allowed_collision_between_links = [
+            (11, 14),
+            (11, 13),
+            (7, 3),
+            (7, 4),
+        ]
+        for link1, link2 in allowed_collision_between_links:
+            p.setCollisionFilterPair(self._id, self._id, link1, link2, 1)
 
         #reset the robot to the initial position, so that the constraints can be set
         self.reset()
@@ -91,10 +117,10 @@ class Rabbit:
         #list with the Points that are connected
         need_Point2Point_constraint = [
             #["parent_id", "chield_id", (0, 0, 0), (0, 0, 0)],
-            [14, 10, (0.069958, -0.011, 0.002443), (0.0, 0.0, -0.03), (0, 0, 0)], #Umdrehung 84, 85
-            [4, 6, (0.069958, -0.011, 0.002443), (0.0, 0.0, -0.03), (0, 0, 0)], #Umdrehung 86, 87
-            [12, 11, (-0.00853, 0.0, -0.069478), (-0.024905, -0.0135, 0.002179), (0, 0, 0)],
-            [8, 7, (-0.00853, 0.0, -0.069478), (-0.024905, 0.0, 0.002179), (0, 0, 0)]
+            [14, 10, (0.069958, -0.011, 0.002443), (0.0, 0.0, -0.03), (0, -1, 0), 100], #Umdrehung 84, 85
+            [4, 6, (0.069958, -0.011, 0.002443), (0.0, 0.0, -0.03), (0, -1, 0), 100], #Umdrehung 86, 87
+            [12, 11, (-0.00853, 0.0, -0.069478), (-0.024905, -0.0135, 0.002179), (0, -1, 0), 150],
+            [8, 7, (-0.00853, 0.0, -0.069478), (-0.024905, 0.0, 0.002179), (0, -1, 0), 150]
         ]
 
         #create the Point2Point_constraints
@@ -116,8 +142,74 @@ class Rabbit:
             p.addUserDebugLine(link1_COM_coor+link1_pos, link2_COM_coor+link2_pos, [1, 0, 0], 1)
 
             cid = p.createConstraint(self._id, constraint[0], self._id, constraint[1], p.JOINT_POINT2POINT, constraint[4], link1_pos, link2_pos)
-            p.changeConstraint(cid, maxForce=100)
-            
+            p.changeConstraint(cid, maxForce=constraint[5], erp=0.9)
+
+    def convert_10_to_8_motors(self, motors_10_value):
+        # Ensure that motors_10_value contains numerical values
+
+        motors_10_value = [value[0] if isinstance(value, tuple) else value for value in motors_10_value]
+        return [(motors_10_value[0] - motors_10_value[2]) / 2, 
+                (motors_10_value[1] - motors_10_value[3]) / 2, 
+                motors_10_value[4], 
+                motors_10_value[5], 
+                motors_10_value[6], 
+                motors_10_value[7], 
+                motors_10_value[8], 
+                motors_10_value[9]]
+        #return motors_10_value
+    
+    def convert_8_to_10_motors(self, motors_8_value):
+        """Convert the 8 motor values to 10 motor values"""
+        if len(motors_8_value) != 8:
+            raise ValueError("The list with the motor values has to have 8 values")
+        return [motors_8_value[0], motors_8_value[1], -motors_8_value[0], -motors_8_value[1]]+motors_8_value[2:]
+
+
+    def create_get_informations(self, status_types):
+        """Create a function that returns the preferred states of the robot
+        status_types: list of strings, the types of the status that should be returned
+        return: function
+
+        This allows us to save resources, like RAM, because we can only get the informations we need.
+        """
+        #create a list of all the status types
+        lambda_list = []
+        for state_type in status_types:
+            if "position"== state_type:
+                lambda_list.append(lambda: p.getBasePositionAndOrientation(self._id)[0])
+            elif "head_orientation"== state_type:
+                lambda_list.append(lambda: self.get_head_sensors())
+            elif "orientation"== state_type:
+                lambda_list.append(lambda: p.getEulerFromQuaternion(p.getBasePositionAndOrientation(self._id)[1]))
+            elif "linear_velocity"== state_type:
+                lambda_list.append(lambda: p.getBaseVelocity(self._id)[0])
+            elif "angular_velocity"== state_type:
+                lambda_list.append(lambda: p.getBaseVelocity(self._id)[1])
+
+            elif "joint_angles" == state_type:
+                lambda_list.append(lambda:  self.convert_10_to_8_motors([p.getJointState(self._id, i)[0] for i in self.Motors_index]))
+            elif "joint_torques" == state_type:
+                lambda_list.append(lambda: self.convert_10_to_8_motors([p.getJointState(self._id, i)[2] for i in self.Motors_index]))
+            elif "joint_velocities"== state_type:
+                lambda_list.append(lambda:  self.convert_10_to_8_motors([p.getJointState(self._id, i)[1] for i in self.Motors_index]))
+            elif "component_coordinates_world"== state_type:
+                lambda_list.append(lambda: [p.getLinkState(self._id, i)[0] for i in range(p.getNumJoints(self._id))])
+            elif "component_coordinates_local"== state_type:
+                lambda_list.append(lambda: [p.getLinkState(self._id, i)[2] for i in range(p.getNumJoints(self._id))])
+
+            elif "vision"== state_type:
+                #get the camera image from the camera at the head of the rabbit
+                lambda_list.append(lambda: self.get_camera_image())
+
+        def get_informations():
+            return [func() for func in lambda_list]
+
+        return get_informations
+    
+    def get_lifetime(self):
+        """Get the lifetime of the robot
+        """
+        return self.lifetime
 
     def get_current_Motor_states(self):
         """Get the current states of all Motors in order
@@ -126,10 +218,38 @@ class Rabbit:
         motor_state = [p.getJointState(self._id, i) for i in self.Motors_index]
         return motor_state
     
+    def get_head_sensors(self):
+        """Get the orientation and velocity of the robot
+        return: linkWorldOrientation, #worldLinkAngularVelocity, worldLinkLinearAcceleration
+        """
+        _, linkWorldOrientation, _, _, _, _, worldLinkLinearVelocity, worldLinkAngularVelocity = p.getLinkState(self._id, self.Camera_Link_id, computeLinkVelocity=True)
+        worldLinkLinearAcceleration = np.array(worldLinkLinearVelocity)-np.array(self.worldLinkLinearVelocity_last)/p.getPhysicsEngineParameters()["fixedTimeStep"]
+        self.worldLinkLinearVelocity_last = worldLinkLinearVelocity
+        return linkWorldOrientation, worldLinkLinearAcceleration
+    
+    # def get_camera_image(self, width=320, height=240):
+    #     """Get the camera image
+    #     """
+    #     view_matrix = p.computeViewMatrixFromYawPitchRoll(cameraTargetPosition=[0, 0, 0], distance=1, yaw=90, pitch=-90, roll=0, upAxisIndex=2)
+    #     projection_matrix = p.computeProjectionMatrixFOV(fov=60, aspect=width/height, nearVal=0.1, farVal=100)
+    #     image = p.getCameraImage(width=width, height=height, viewMatrix=view_matrix, projectionMatrix=projection_matrix)
+    #     return image
+    
+    def send_goal_pose(self, pose_positions, range=[-1, 1]):
+        """
+        This sends the goal pose to the robot. The default range is from -1 to 1
+        pose_positions: list with the goal positions of the servos, with the used range. e.g. [0,0,   0,0,   0,0,   0,0]
+        """
+        #map the servo_positions to the range of the servos
+        servo_positions = self.convert_8_to_10_motors(pose_positions)
+        servo_positions = [self._map(pos, range[0], range[1], self.Motors_range[i][0], self.Motors_range[i][1]) for i, pos in enumerate(servo_positions)]
+        self.send_motor_commands(servo_positions)
+        
+
     def send_motor_commands(self, motor_commands):
         """Send motor commands to the robot
         motor_commands: list with the motor commands in the order of the motors
-        [0,0,   0,0,   0,0,   0,0]
+        
         """
         #the motors that control the lower legs need inverse kinematics
 
@@ -156,11 +276,11 @@ class Rabbit:
         """
         if all_joints: #doesn't work yet!!!!!!!!!!!!!
             for i in self.Joints_index:
-                self.UserSlider.append([p.addUserDebugParameter(f"Joint_{i}", -np.pi, np.pi, 0), i])
+                self.UserSlider.append([p.addUserDebugParameter(f"Joint_{i}", -1, 1, 0), i])
             self.UserControlPanel_added = True
         else:
-            for i in self.Motors_index:
-                self.UserSlider.append([p.addUserDebugParameter(f"Joint_{i}", -np.pi, np.pi, 0), i])
+            for i in range(8):
+                self.UserSlider.append([p.addUserDebugParameter(f"Joint_{i}", -1, 1, 0), i])
                 # Add a button to reset the position
             self.reset_button = p.addUserDebugParameter("Reset Position", 1, 0, 1)
             self.UserControlPanel_added = True
@@ -192,12 +312,13 @@ class Rabbit:
         self.UserControlPanel_added = False
 
     
-    def step_simulation(self):
+    def step(self):
         """Step the simulation
         """
         if self.UserControlPanel_added:
-            for i in self.UserSlider:
-                p.setJointMotorControl2(self._id, i[1], p.POSITION_CONTROL, targetPosition=p.readUserDebugParameter(i[0]), force=self.MAXFORCE, maxVelocity=self.MAXVELOCITY)
+            # for i in self.UserSlider:
+            #     p.setJointMotorControl2(self._id, i[1], p.POSITION_CONTROL, targetPosition=p.readUserDebugParameter(i[0]), force=self.MAXFORCE, maxVelocity=self.MAXVELOCITY)
+            self.send_goal_pose([p.readUserDebugParameter(i[0]) for i in self.UserSlider])
             self.check_reset_button()
 
         if self.hung:
@@ -207,14 +328,14 @@ class Rabbit:
         #remove the UserDebugTexts
         #p.removeAllUserDebugItems()
 
-
-
-        
+        #update the lifetime!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        self.lifetime += p.getPhysicsEngineParameters()["fixedTimeStep"]
 
 
     def reset(self):
         """Reset the robot to the initial position
         """
+        self.lifetime = 0
         p.resetBasePositionAndOrientation(self._id, self.init_pos, [0, 0, 0, 1])
         # #reset all the motors
         #repostion the joints
@@ -353,6 +474,9 @@ class Rabbit:
         Motor2 = motor_states[1][0]
         Motor3 = self.get_kneeJoint_inverse_kinematics(Motor1, Motor2)
         #return foot_angle, knee_angle
+
+    def getTotalCurrent(self):
+        return 0
     
 
     #getter for _robot

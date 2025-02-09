@@ -1,0 +1,7 @@
+Model: PPO
+Model Name: Disney_Imitation_v1
+Number of CPUs: 5
+Total Timesteps: 10000000
+Env Parameters: {'ModelType': 'PPO', 'rewards_type': ['Disney_Imitation'], 'observation_type': ['head_orientation', 'head_acceleration', 'head_angular_acceleration', 'joint_torques'], 'obs_time_space': 2, 'terrain_type': 'flat', 'recorded_movement_file_path_list': ['Forwardsprinting_v1']}
+Hyperparameters: {'learning_rate': 0.00025, 'n_steps': 98304, 'batch_size': 8192, 'ent_coef': 0.0, 'gamma': 0.99, 'gae_lambda': 0.95, 'max_grad_norm': 1.0, 'clip_range': 0.2, 'n_epochs': 5, 'policy_kwargs': {'net_arch': [512, 512, 512], 'activation_fn': <class 'torch.nn.modules.activation.ELU'>}}
+Used_env_class_filename: RL_Agent_Env
