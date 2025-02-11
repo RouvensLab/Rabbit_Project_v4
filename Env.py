@@ -42,13 +42,17 @@ class Simulation:
         elif rabbit_type == "Rabbit_v3_mesured":
             from Objects.Rabbit_v3 import Rabbit
             from mesure_rabbt import get_measuredRabbit 
-            self.rabbit = get_measuredRabbit(Rabbit)([0, 0, 0.3])
+            self.rabbit = get_measuredRabbit(Rabbit,
+                                            state_types_body=["head_orientation", "head_angular_velocity", "head_acceleration" ], 
+                                            state_types_servos=["joint_angles", "joint_velocities", "joint_torques"], 
+                                            trajectory_data_structure= []
+                                             )([0, 0, 0.3])
         elif rabbit_type == "Rabbit_real_mesured":
             from Real_robot.real_rabbit import Rabbit_real
             from mesure_rabbt import get_measuredRabbit
             self.rabbit = get_measuredRabbit(Rabbit_real,
                                             state_types_body=["head_orientation", "head_angular_velocity", "head_acceleration" ], 
-                                            state_types_servos=["joint_angles", "joint_velocities", "joint_torques", "joint_action_rate"], 
+                                            state_types_servos=["joint_current", "joint_velocities", "joint_torques"], 
                                             trajectory_data_structure= []
                                              )([0, 0, 0.3])
             #self.rabbit.init_Gui()

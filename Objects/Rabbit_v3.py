@@ -243,7 +243,7 @@ class Rabbit:
                 lambda_list.append(lambda: self.get_head_sensors()[1])
             elif "head_acceleration"== state_type:
                 lambda_list.append(lambda: self.get_head_sensors()[1])
-            elif "head_angular_acceleration"== state_type:
+            elif "head_angular_velocity"== state_type:
                 lambda_list.append(lambda: self.get_head_sensors()[2])
 
             elif "joint_angles" == state_type:
@@ -265,6 +265,8 @@ class Rabbit:
             elif "vision"== state_type:
                 #get the camera image from the camera at the head of the rabbit
                 lambda_list.append(lambda: self.get_camera_image())
+            else:
+                raise ValueError(f"Unknown status type: {state_type}")
 
         def get_informations():
             return [func() for func in lambda_list]

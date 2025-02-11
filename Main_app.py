@@ -2,6 +2,7 @@ import sys
 import time
 import ast
 import threading
+import traceback
 import numpy as np
 from PySide6.QtWidgets import (
     QApplication,  QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,QStatusBar,
@@ -168,12 +169,13 @@ class ActionTimetableEditor(QMainWindow):
         self.def_env_param_kwargs = {
         "ModelType": "SAC",
         "rewards_type": [],
-        "observation_type": ["rhythm"],
+        "observation_type_stacked": [],
+        "observation_type_solo": ["rhythm"],
         "terrain_type": "flat",
-        "recorded_movement_file_path_list": []
+        "recorded_movement_file_path_dic": {}
     }
         self.env_param_kwargs = self.def_env_param_kwargs
-        self.env_startup_parms = {"render_mode": "human", "real_robot": False, "gui": True, "RobotType":"Rabbit_mesured"}
+        self.env_startup_parms = {"render_mode": "human", "real_robot": False, "gui": True, "RobotType":"Rabbit_v3_mesured"}
         self.env = RL_Env(**self.env_startup_parms, **self.env_param_kwargs)
         self.env.simulation.hung = True
         self.RabbitMesure_widget = self.env.simulation.rabbit.create_GuiWidget()
@@ -192,9 +194,16 @@ class ActionTimetableEditor(QMainWindow):
         self.env_pause = False
         self.simulation_thread = None
         self.initUI()
-        self.simulation_thread = threading.Thread(target=self.run_simulation)
+        self.simulation_thread = threading.Thread(target=self.run_simulation_with_error_handling)
         self.simulation_thread.start()
         #self.simulation_thread.join()
+
+    def run_simulation_with_error_handling(self):
+        try:
+            self.run_simulation()
+        except Exception as e:
+            print(f"Exception in simulation thread: {e}")
+            traceback.print_exc()
 
     def restore_geometry(self):
         """Restore the window's geometry and state from QSettings."""
@@ -499,15 +508,17 @@ class ActionTimetableEditor(QMainWindow):
                             print(f"Error in model prediction: {e}")
                     else: #self.controlMode_active.currentText() == "Auto": # Manual Expert is controlling the robot
                         try:
-                            action, state = self.manual_exp.think_and_respond(obs, None, done)
+                            action, state = self.manual_exp.think_and_respond(obs, None, done, self.env.simulation.rabbit.lifetime)
+                            print(action)
                             # Highlight the active row
                             action_key_index = list(self.manual_exp.action_timetable.keys()).index(self.manual_exp.action_key)
                             self.table.highlight_active_row(action_key_index)
                         except Exception as e:
                             self.no_error = False
                             print(f"Error in manual response: {e}")
+                            traceback.print_exc()
 
-                    print(action)
+                    #print(action)
                     try:
                         obs, reward, terminated, truncated, info = self.env.step(action)
                         print(obs)
@@ -538,9 +549,6 @@ class ActionTimetableEditor(QMainWindow):
 class ManualExpert:
     def __init__(self, sim_freq= 5):
         self.sim_freq = sim_freq
-
-        self.max_rhytm_size = 1000
-
         self.current_action = [0 for i in range(9)]
         self.action_key = 0
 
@@ -579,45 +587,30 @@ class ManualExpert:
         #self.action_timetable = {0.0: [-0.8, 0.0, -0.0, 0.3, -0.0, 0.3, -1.0, -1.0], 0.2: [-0.3, 0.0, 0.25, 0.3, 0.25, 0.3, -1.0, -1.0], 0.3: [0.2, 0.0, 0.4, -0.6, 0.4, -0.6, 0.4, 0.4], 0.4: [-0.2, 0.0, -0.1, 0.5, -0.1, 0.5, 0.5, 0.5], 0.45: [-0.5, 0.0, -0.1, 0.5, -0.1, 0.5, 0.5, 0.5], 0.6: [-0.5, 0.0, -0.1, 0.3, -0.1, 0.3, 0.5, 0.5], 0.8: [-1.0, 0.0, -0.4, -0.6, -0.4, -0.6, 1.0, 1.0]}
         
         #pusch sprint v1
-        self.action_timetable = {0.0: [-0.5, 0.0, -0.2, 0.4, -0.2, 0.4, -0.5, -0.5], 0.2: [-0.5, 0.0, 0.5, -0.4, 0.5, -0.4, 1.0, 1.0], 0.45: [1.0, 0.0, 0.5, 0.6, 0.5, 0.6, 0.0, 0.0], 0.6: [1.0, 0.0, -0.2, 0.6, -0.2, 0.6, -0.5, -0.5], 0.7: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+        #self.action_timetable = {0.0: [-0.5, 0.0, -0.2, 0.4, -0.2, 0.4, -0.5, -0.5], 0.2: [-0.5, 0.0, 0.5, -0.4, 0.5, -0.4, 1.0, 1.0], 0.45: [1.0, 0.0, 0.5, 0.6, 0.5, 0.6, 0.0, 0.0], 0.6: [1.0, 0.0, -0.2, 0.6, -0.2, 0.6, -0.5, -0.5], 0.7: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
 
         #sitting
-        #self.action_timetable = {0:  [-0.3, 0,   -0.5, 0.3,  -0.5, 0.3,    0, 0]}
+        self.action_timetable = {0:  [-0.3, 0,   -0.5, 0.3,  -0.5, 0.3,    0, 0]}
 
 
 
-    def think_and_respond(self, obs_, state, done):
-        timestep = obs_[-1]
-
+    def think_and_respond(self, obs_, state, done, current_time=0):
         # Define the action based on the time table
         action_keytimes = list(self.action_timetable.keys())
         #get the action which is at the current time step
-        current_time_sec = timestep*self.max_rhytm_size*0.01
         last_time = action_keytimes[-1]
         
-        #get the action key which is over the current time
-        self.action_key = [key for key in action_keytimes if key <= current_time_sec][-1]
-        if self.action_key == last_time:
-            next_time_step_size = -timestep
-            self.action_key = 0
+        #find the next action key
+        if 0 ==last_time:
+            time_in_timetable = 0
         else:
-            next_time_step_size = self.sim_freq/self.max_rhytm_size
-        
-        #print("action_key1: ", self.action_key)
-        #print("timestep", timestep, "current_time_sec: ", current_time_sec, "action_key: ", self.action_key, "next_time_step_size: ", next_time_step_size)
+            time_in_timetable = current_time % last_time
+        #search nearest key
+        action_key = min(action_keytimes, key=lambda x:abs(x-time_in_timetable))
 
-        action = self.action_timetable[self.action_key]+[next_time_step_size]
+        action = self.action_timetable[action_key]
         state = obs_[:-1]
         return np.array(action), state
-    
-    def think_response_with_ndarray(self, obs_ndarray, state_ndarray, done_ndarray):
-        actions = []
-        states = []
-        for obs_, done in zip(obs_ndarray, done_ndarray):
-            action, state = self.think_and_respond(obs_, state_ndarray, done)
-            actions.append(action)
-            states.append(state)
-        return np.array(actions), state_ndarray
 
 if __name__=="__main__":
     #env = RL_Env(ModelType="SAC", gui=True, render_mode="human", maxSteps=360*5, terrain_type="flat", rewards_type=["stability"], observation_type=["joint_forces", "joint_angles", "rhythm"], simulation_stepSize=5, restriction_2D=False, real_robot=False)

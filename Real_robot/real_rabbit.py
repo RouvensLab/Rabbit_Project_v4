@@ -150,6 +150,12 @@ class Rabbit_real:
                 lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "Load") for i in self.Joints_index])
             elif "joint_velocities"== state_type:
                 lambda_list.append(lambda:  [self.servoControler.servoStack.get_state(i, "PresSpd") for i in self.Joints_index])
+            elif "joint_current" == state_type:
+                lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "Current") for i in self.Joints_index])
+            elif "joint_voltage" == state_type:
+                lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "Voltage") for i in self.Joints_index])
+            elif "joint_temperature" == state_type:
+                lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "Temperature") for i in self.Joints_index])
             elif "joint_action_rate"== state_type:
                 lambda_list.append(lambda: self.get_action_rate())
             elif "joint_action_acceleration"== state_type:

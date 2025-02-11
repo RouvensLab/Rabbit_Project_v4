@@ -14,7 +14,7 @@ class ServoControler:
     def __init__(self):
         # some global defined variables. Not changable-------------------
         self.SERIAL_PORT = 'COM3'
-        self.BAUDRATE = 115200
+        self.BAUDRATE = 115200                #115200
         self.SCS1_ID = 1
         self.SCS2_ID = 5
         self.SCS_MOVING_ACC = 255
@@ -198,6 +198,13 @@ class ServoControler:
         return data
     
     def get_Sync_ServosInfo(self):
+        """
+        Retrieve and update the state information of all servos.
+        This method iterates through the servo state structure, initializes a GroupSyncRead instance,
+        adds parameters for each servo, sends a read request, and updates the servo state with the received data.
+        Returns:
+            dict: Updated servo state information.
+        """
         '''
         Get all the information of the servos
         '''
@@ -209,11 +216,13 @@ class ServoControler:
             for scs_id in self.servos_info_limitation.keys():
                 scs_addparam_result = self.groupSyncRead.addParam(scs_id)#false means that the scs_id was already added
                 if scs_addparam_result != True:
-                    print("[ID:%03d] groupSyncRead addparam failed" % scs_id)
+                    #print("[ID:%03d] groupSyncRead addparam failed" % scs_id)
+                    pass
 
             scs_comm_result = self.groupSyncRead.txRxPacket()
             if scs_comm_result != COMM_SUCCESS:
-                print("%s" % self.packetHandler.getTxRxResult(scs_comm_result))
+                #print("%s" % self.packetHandler.getTxRxResult(scs_comm_result))
+                pass
 
             #print(self.groupSyncRead.data_dict)#Here is all the data that was received
 
@@ -226,7 +235,8 @@ class ServoControler:
                     self.servoStack.update_state(scs_id, data_type, self.groupSyncRead.getData(scs_id, values[2], values[3]))
                 else:
                     #No Update, 
-                    print("[ID:%03d] groupSyncRead getdata failed" % scs_id)
+                    #print("[ID:%03d] groupSyncRead getdata failed" % scs_id)
+                    pass
 
             # Clear syncread parameter storage
             self.groupSyncRead.clearParam()
@@ -328,7 +338,7 @@ class ServoControler:
 
         # Clear syncwrite parameter storage
         self.packetHandler.groupSyncWrite.clearParam()
-        time.sleep(0.002) #wait for servo status moving=1
+        #time.sleep(0.002) #wait for servo status moving=1
 
 
     def safety_check(self, Servo_ID, angle):
@@ -519,11 +529,49 @@ if __name__=="__main__":
         
     Controler = ServoControler()
     Controler.ScanServos()
-
-    #move servo 7
-    print(Controler.get_Sync_ServosInfo())
-    Controler.setSingleServoPosSpeedAcc(7, 180, 4000)
+    #Controler.setSingleServoPosSpeedAcc(7, 180, 4000)
+    Controler.setSingleServoPosSpeedAcc(3, 180, 4000)
     Controler.run_sync_write_commands()
+    #move servo 7
+    while True:
+        servo_data = Controler.get_Sync_ServosInfo()
+        formatted_data = {}
+        for servo_id, data in servo_data.items():
+            formatted_data[servo_id] = {
+            "Position": round(Controler.servoStack.get_state(servo_id, "PresPos"),3),
+            "Speed": round(Controler.servoStack.get_state(servo_id, "PresSpd"),3),
+            "Load": round(Controler.servoStack.get_state(servo_id, "Load"),3),
+            "Voltage": round(Controler.servoStack.get_state(servo_id, "Voltage"), 2),
+            "Current": round(Controler.servoStack.get_state(servo_id, "Current"),3),
+            "Temperature": Controler.servoStack.get_state(servo_id, "Temperature"),
+            "TorqueEnable": round(Controler.servoStack.get_state(servo_id, "torque_enable"),3),
+            "MobileSign": Controler.servoStack.get_state(servo_id, "mobile_sign")
+            }
+        
+        # Update the table with new data
+        table = PrettyTable()
+        table.field_names = ["Servo ID", "Position", "Speed", "Load", "Voltage", "Current", "Temperature", "TorqueEnable", "MobileSign"]
+        
+        for servo_id, data in formatted_data.items():
+            table.add_row([
+                servo_id,
+                data["Position"],
+                data["Speed"],
+                data["Load"],
+                data["Voltage"],
+                data["Current"],
+                data["Temperature"],
+                data["TorqueEnable"],
+                data["MobileSign"]
+            ])
+        
+        print("\033c", end="")  # Clear the console
+        print(table)
+        time.sleep(0.01)
+   
+        time.sleep(0.01)
+    # Controler.setSingleServoPosSpeedAcc(7, 180, 4000)
+    # Controler.run_sync_write_commands()
 
     
 

@@ -9,6 +9,8 @@ import pyqtgraph as pg
 
 #for threading
 import threading
+import sys
+import numpy as np
 
 from tools.Trajectory import TrajectoryRecorder
 
@@ -47,7 +49,7 @@ def get_measuredRabbit(rabbit_type = Rabbit_real,
             self.trajectory_recorder = None
             self.trajectory_data_structure = trajectory_data_structure
             self.getTrajectoryData_func = self.create_get_informations(self.trajectory_data_structure)
-            print("creating get functions succeeded")
+            print("creating get functions succeededy")
 
         def create_seperate_Window(self):
             self.thread = threading.Thread(target=self.init_Gui)
@@ -137,81 +139,10 @@ class PlotterWidget(QWidget):
         self.scroll_content = QWidget()
         self.scroll_layout = QVBoxLayout(self.scroll_content)
 
-        # Section for visualizing body data
-        self.scroll_layout.addWidget(QLabel("--------Body Data--------"))
-        self.BodyGraph_layout = QGridLayout()
-        self.scroll_layout.addLayout(self.BodyGraph_layout)
-
-        # Separator between sections
-        self.scroll_layout.addWidget(QLabel("--------Servo Data--------"))
-
-        # Section for servo data visualization
-        self.ServoSplit_layout = QHBoxLayout()
-        self.ServosGraph_layout = QGridLayout()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.run)
-        self.timer.start(10)  # Check the queue every 100 ms
-
-
-        class ServoGraphWidget(QWidget):
-            """A Widget that shows all kind of Data of Servos e.g. strength, current, velocity or position 
-            Specialties:
-            When clicked on the Graph, it opens as a big matplotlib window, that can be edited, saved, ...
-            """
-
-            def __init__(self, Graph_title, n_Servos, y_range=None):
-                super().__init__()
-                self.layout = QVBoxLayout()
-                self.title = QLabel(Graph_title)
-                self.layout.addWidget(self.title)
-
-                self.selected_servos = [i for i in range(n_Servos)]
-                self.data = [[] for _ in range(n_Servos)]
-                self.time_line = []
-                self.plot_widget = pg.PlotWidget()
-                self.layout.addWidget(self.plot_widget)
-                self.setLayout(self.layout)
-
-                self.n_Servos = n_Servos
-                self.colors = [pg.intColor(i, hues=n_Servos) for i in range(n_Servos)]
-                self.plot_widget.showGrid(x=True, y=True)
-                self.plot_widget.setLabel('left', 'Value')
-                self.plot_widget.setLabel('bottom', 'Time (s)')
-                self.plot_widget.setTitle(Graph_title)
-                if y_range is not None:
-                    self.plot_widget.setYRange(*y_range)
-
-                self.plot_widget.addLegend()
-                self.curves = [self.plot_widget.plot([], [], pen=self.colors[i], name=f"Servo {i}") for i in range(n_Servos)] 
-
-                # Set size policy to cover 30% of the main widget size
-                self.setSizePolicy(QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred))
-                self.setMinimumHeight(200)
-
-            def add_data(self, time, data):
-                self.time_line.append(time)
-                for servo_id, d in enumerate(data):
-                    self.data[servo_id].append(d)
-                    self.curves[servo_id].setData(self.time_line, self.data[servo_id])  # Update plot without clearing
-
-            def change_servo_visibility(self, idf):
-                if idf in self.selected_servos:
-                    self.selected_servos.remove(idf)
-                else:
-                    self.selected_servos.append(idf)
-                self.update_visibility()
-
-            def update_visibility(self):
-                for i, curve in enumerate(self.curves):
-                    curve.setVisible(i in self.selected_servos)
-
-            def clear(self):
-                self.time_line = []
-                self.data = [[] for _ in range(self.n_Servos)]
-                for curve in self.curves:
-                    curve.setData([], [])
-
+        self.timer.start(50)  # Check the queue every 100 ms
 
         # Widget for managing servo checkboxes to toggle visibility
         class ServoCheckboxesWidget(QWidget):
@@ -228,50 +159,122 @@ class PlotterWidget(QWidget):
                     self.main_layout.addWidget(servo_checkbox)
                 self.setLayout(self.main_layout)
 
-        # Setup all body graphs
-        self.body_graphs = []
-        for graph_name in Body_GraphLabels:
-            body_graph = ServoGraphWidget(Graph_title=graph_name, n_Servos=3)
-            self.body_graphs.append(body_graph)
-            self.BodyGraph_layout.addWidget(body_graph)
+        # ...existing code...
+
+        # Create Graphics Layout Widget
+        self.plot_widget = pg.GraphicsLayoutWidget()
         
+        self.plot_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # Setup all servo graphs and their visibility toggle functions
-        self.servo_graphs = []
-        self.servo_id_visibility_func = []
-        for graph_name in Servos_GraphLabel:
-            servo_graph = ServoGraphWidget(Graph_title=graph_name, n_Servos=n_Servos)
-            self.servo_graphs.append(servo_graph)
-            self.servo_id_visibility_func.append(servo_graph.change_servo_visibility)
-            self.ServosGraph_layout.addWidget(servo_graph)
 
-        def change_vis_servo_id(id, checked):
-            for func in self.servo_id_visibility_func:
-                func(id)
 
-        # Add servo checkboxes for selecting which servos to display
-        self.servo_checkboxes_widget = ServoCheckboxesWidget([f"Servo {i+1}" for i in range(n_Servos)], change_vis_servo_id)
-        self.ServoSplit_layout.addWidget(self.servo_checkboxes_widget)
 
-        self.ServoSplit_layout.addLayout(self.ServosGraph_layout)
+        # Setup body graphs
+        self.body_labels = ["x", "y", "z"]
+        self.curves_body, last_plot, last_row = self.create_graphs(Body_GraphLabels, body_labels=self.body_labels)
+        # Setup servo graphs
+        self.servo_labels = ["Servo 1", "Servo 2", "Servo 3", "Servo 4", "Servo 5", "Servo 6", "Servo 7", "Servo 8"]
+        self.curves_servos, last_plot, last_row = self.create_graphs(Servos_GraphLabel, last_plot=last_plot, last_row=last_row, body_labels=self.servo_labels)
+        last_plot.getAxis('bottom').setStyle(showValues=True)
 
-        self.scroll_layout.addLayout(self.ServoSplit_layout)
+
+        #create limited arrays for the data.
+        self.time_size_limit = 100
+        self.curves_array_body = np.zeros((len(Body_GraphLabels), self.time_size_limit, len(self.body_labels)), dtype=np.float16)
+        self.curves_array_servos = np.zeros((len(Body_GraphLabels), self.time_size_limit, len(self.servo_labels)), dtype=np.float16)
+        self.time_array = np.zeros(self.time_size_limit, dtype=np.float16)
+        print(self.curves_array_body, self.curves_array_body.shape)
+
+        self.scroll_layout.addWidget(self.plot_widget)
         self.scroll_area.setWidget(self.scroll_content)
 
         self.main_layout.addWidget(self.scroll_area)
         self.setLayout(self.main_layout)
 
-    def update_add_BodyPlots(self, time, BodyData):
+    def create_graphs(self,  GraphLabels, last_plot=None, last_row=0, body_labels=["x", "y", "z"]):
+        # Create a dictionary to store curves for each graph
+        # Setup body graphs
+        colors = [pg.intColor(i, hues=len(body_labels)) for i in range(len(body_labels))]
+        # Adjust the layout of the plot widget
+        startLen = last_row
+        curves = []
+        for i, graph_name in enumerate(GraphLabels):
+            #create a plot for every graph
+            plot = self.plot_widget.addPlot(row=i+1+startLen, col=0)
+            self.plot_widget.ci.layout.setRowStretchFactor(i+1+startLen, 1)
+            #set plot title
+            plot.setTitle(graph_name)
+            plot.showGrid(x=True, y=True)
+            plot.getAxis("left").setWidth(50)
+            plot.getAxis("right").setWidth(50)
+            #Labels
+            plot.setLabel("left", "Value")
+            plot.setLabel("bottom", "Time [s]")
+            # Add Legends on top of each plot
+            legend = pg.LegendItem(colCount=8)
+            self.plot_widget.addItem(legend, row=i+startLen, col=0)
+
+            plot.getAxis('bottom').setStyle(showValues=False)
+
+            for item in legend.items:
+                item[1].mouseClickEvent = lambda ev: self.toggle_visibility(curve)
+
+
+            if last_plot:
+                #Link x Axis
+                plot.setXLink(last_plot)
+                self.plot_widget.nextRow()
+            curves.append([])
+            for j, curve in enumerate(body_labels):
+                curve = plot.plot(pen=pg.mkPen(color=colors[j]), name=f"{curve}")
+                legend.addItem(curve, f"{curve}")
+                curves[i].append(curve)
+            last_plot = plot
+            last_row = i+1+startLen
+        return curves, last_plot, last_row
+
+
+
+    def update_add_Plots(self, time, BodyData, ServoData):
         if time - self.last_time > 0:
             self.last_time = time
+            self.time_array = np.concatenate([self.time_array[1:], np.array([time])])
+            #add the body data to the curves_array_body
+            #bodyData = [np.array([x, y, z]), np.array([x, y, z]), ...] for every graph
+            #self.curves_array_body = np.array([np.array([[x, y, z], [x, y, z], ...for every time step]), np.array([[x, y, z], [x, y, z], ...for every time step]), ...for every graph type])
+            #add a new dimension to the array
+            BodyData_array = np.array(BodyData)
+            print("Bevore", BodyData_array, BodyData_array.shape)
+            BodyData_array = np.expand_dims(BodyData_array, axis=1)
+            print(BodyData_array, BodyData_array.shape)
+            print(self.curves_array_body[:, 1:, :], self.curves_array_body[:, 1:, :].shape)
+            # Ensure the dimensions match before concatenation
+            self.curves_array_body = np.concatenate([self.curves_array_body[:, 1:, :], BodyData_array], axis=1)
+            #for the servo data
+            ServoData_array = np.array(ServoData)
+            ServoData_array = np.expand_dims(ServoData_array, axis=1)
+            print(ServoData_array, ServoData_array.shape)
+            self.curves_array_servos = np.concatenate([self.curves_array_servos[:, 1:, :], ServoData_array], axis=1)
+
         else:
             self.last_time = time
+            self.time_array = np.zeros_like(self.time_array)
+            self.curves_array_body = np.zeros((len(self.Body_GraphLabels), self.time_size_limit, len(self.body_labels)), dtype=np.float16)
+            self.curves_array_servos = np.zeros((len(self.Servos_GraphLabel), self.time_size_limit, len(self.servo_labels)), dtype=np.float16)
 
-            for graph_id, dataType_array in enumerate(BodyData):
-                self.body_graphs[graph_id].clear()
 
-        for graph_id, dataType_array in enumerate(BodyData):
-            self.body_graphs[graph_id].add_data(time, dataType_array)
+        print(self.curves_array_body, self.curves_array_body.shape)
+        for graph_id, graph_curves in enumerate(self.curves_body):
+            for graph_curve_id, curve in enumerate(graph_curves):
+                curve_array = self.curves_array_body[graph_id, :, graph_curve_id]
+                print("Curve array: ", curve_array, curve_array.shape)
+                print("Time array: ", self.time_array, self.time_array.shape)
+                curve.setData(self.time_array, curve_array)
+
+        for graph_id, graph_curves in enumerate(self.curves_servos):
+            for graph_curve_id, curve in enumerate(graph_curves):
+                curve_array = self.curves_array_servos[graph_id, :, graph_curve_id]
+                curve.setData(self.time_array, curve_array)
 
     def update_add_ServoPlots(self, time, ServoData):
         if time - self.last_time > 0:
@@ -280,24 +283,27 @@ class PlotterWidget(QWidget):
             self.last_time = time
 
             for graph_id, dataType_array in enumerate(ServoData):
-                #print(f"{graph_id} ServoData {dataType_array}")
-                self.servo_graphs[graph_id].clear()
+                self.curves[graph_id].clear()
 
         for graph_id, dataType_array in enumerate(ServoData):
-            #print(f"{graph_id} ServoData {dataType_array}")
-            self.servo_graphs[graph_id].add_data(time, dataType_array)
+            self.curves_array_servos[graph_id] = np.concatenate([self.curves_array_servos[graph_id], np.array(dataType_array)], axis=1)
+            for servo_id in range(len(dataType_array)):
+                self.curves[self.Servos_GraphLabel[graph_id]][servo_id].setData(self.time_array, self.curves_array_servos[graph_id][servo_id])
 
+    # ...existing code...
     
     def run(self):
         while not self.queue.empty():
             try:
                 self.time, self.BodyData, self.ServoData = self.queue.get_nowait()
-                self.update_add_BodyPlots(self.time, self.BodyData)
-                self.update_add_ServoPlots(self.time, self.ServoData)
+                #self.time_array = np.append(self.time_array, self.time)
+                self.update_add_Plots(self.time, self.BodyData, self.ServoData)
+                #self.update_add_ServoPlots(self.time, self.ServoData)
             except queue.Empty:
                 pass
     
-    
+    def toggle_visibility(self, curve):
+        curve.setVisible(not curve.isVisible())
         
 
 
