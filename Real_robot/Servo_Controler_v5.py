@@ -72,33 +72,39 @@ class ServoControler:
         }
         self.num_servos = int(len(self.servos_info_limitation))
         print("Num_Servos: ", self.num_servos)
+        #[index, start_value, address, length, unit]
+        self.servo_state_structure = {"Position": [0, 0, SMS_STS_PRESENT_POSITION_L, 2, [0, 4094, 0, 2*math.pi]],
+                                        "Velocity": [1, 0, SMS_STS_PRESENT_SPEED_L, 2, [0, 4094, 0, 2*math.pi]],
+                                        "Load": [2, 0, SMS_STS_PRESENT_LOAD_L, 2, 0.1],
+                                        "Voltage": [3, 0, SMS_STS_PRESENT_VOLTAGE, 1, 0.1],
+                                        "Current": [4, 0, SMS_STS_PRESENT_CURRENT_L, 2, 0.0065],
+                                        "Temperature": [5, 0, SMS_STS_PRESENT_TEMPERATURE, 1, 1],
+                                        "torque_enable": [6, 1, SMS_STS_TORQUE_ENABLE, 1, 1],
+                                        "mobile_sign": [7, 0, SMS_STS_MOVING, 1, 1]
+                                        }
+
+
 
 
 
         # Changable variables with important information-----------------
         self.start_time = time.time()
 
-        #Servo range properies
-        self.servo_parameters = {
-            "PresPos": 4094, "PresSpd": 4094, "Load": 1023, 
-            "Voltage": 100, "Current": 0.01, "Temperature": 100, 
-            "torque_enable": 1, "LastUpdate": None
-        }
         class ServoStack:
             def __init__(self):
                 #units are in rad
                 #[index, start_value, address, length, unit]
-                self.servo_state_structure = {"PresPos": [0, 0, SMS_STS_PRESENT_POSITION_L, 2, [0, 4094, 0, 2*math.pi]], 
-                                              "PresSpd": [1, 0, SMS_STS_PRESENT_SPEED_L, 2, [0, 4094, 0, 2*math.pi]], 
-                                              "Load": [2, 0, SMS_STS_PRESENT_LOAD_L, 2, 0.1], 
-                                              "Voltage": [3, 0, SMS_STS_PRESENT_VOLTAGE, 1, 0.1], 
-                                              "Current": [4, 0, SMS_STS_PRESENT_CURRENT_L, 2, 0.0065], 
-                                              "Temperature": [5, 0, SMS_STS_PRESENT_TEMPERATURE, 1, 1], 
+                self.servo_state_structure = {"Position": [0, 0, SMS_STS_PRESENT_POSITION_L, 2, [0, 4094, 0, 2*math.pi]],
+                                              "Velocity": [1, 0, SMS_STS_PRESENT_SPEED_L, 2, [0, 4094, 0, 2*math.pi]],
+                                              "Load": [2, 0, SMS_STS_PRESENT_LOAD_L, 2, 0.1],
+                                              "Voltage": [3, 0, SMS_STS_PRESENT_VOLTAGE, 1, 0.1],
+                                              "Current": [4, 0, SMS_STS_PRESENT_CURRENT_L, 2, 0.0065],
+                                              "Temperature": [5, 0, SMS_STS_PRESENT_TEMPERATURE, 1, 1],
                                               "torque_enable": [6, 1, SMS_STS_TORQUE_ENABLE, 1, 1],
                                               "mobile_sign": [7, 0, SMS_STS_MOVING, 1, 1]
                                               }
                 self.data_types = list(self.servo_state_structure.keys())
-                
+
                 self.servo_state_stack = {}
 
                 self.servo_action_structure = {"angle": [0, 0], "speed": [1, 0], "acc": [2, 0]}
@@ -111,7 +117,7 @@ class ServoControler:
 
                 self.servo_action_stack[servo_id] = [i[1] for i in self.servo_action_structure.values()]
 
-            
+
             def remove_servo(self, servo_id):
                 return self.servo_state_stack.pop(servo_id)
 
@@ -129,7 +135,7 @@ class ServoControler:
 
             def get_servo_states(self, servo_id):
                 return self.servo_state_stack[servo_id]
-            
+
             def get_state(self, servo_id, data_type, origin = False):
                 """returns the for every servo the desired data type"""
                 if data_type in self.data_types:
@@ -145,10 +151,10 @@ class ServoControler:
                 else:
                     print("Data type not found")
                     return None
-                
+
             def get_servo_actions(self, servo_id):
                 return self.servo_action_stack[servo_id]
-            
+
             def get_action(self, servo_id, action_type):
                 """returns the for every servo the desired data type"""
                 if action_type in self.servo_action_structure.keys():
@@ -156,22 +162,22 @@ class ServoControler:
                 else:
                     print("Action type not found")
                     return None
-                
+
             def map(self, x, in_min, in_max, out_min, out_max):
                 return round((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min, 5)
 
-            
+
         self.servoStack = ServoStack()
         for servo_id in self.servos_info_limitation.keys():
             self.servoStack.add_servo(servo_id)
-        
+
 
 
         # Initialize PortHandler and PacketHandler instances
         self.portHandler = PortHandler(self.SERIAL_PORT)
         self.packetHandler = SMS_STS_PacketHandler(self.portHandler, self.protocol_end)
 
-        
+
 
         # connect to the port
         self.portHandler.openPort()
@@ -181,22 +187,10 @@ class ServoControler:
     def _map(self, x, in_min, in_max, out_min, out_max):
         return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
 
-    #reading Data -----------------------------------------------------
-    def read_servo_data(self, servo_id, address, length):
-        if length == 1:
-            data, scs_comm_result, scs_error = self.packetHandler.read1ByteTxRx(self.portHandler, servo_id, address)
-        elif length == 2:
-            data, scs_comm_result, scs_error = self.packetHandler.read2ByteTxRx(self.portHandler, servo_id, address)
-        elif length == 4:
-            data, scs_comm_result, scs_error = self.packetHandler.read4ByteTxRx(self.portHandler, servo_id, address)
-        else:
-            raise ValueError("Invalid length specified")
-        
-        # Check if the returned values are valid
-        # if scs_comm_result != 0 or scs_error != 0:
-        #     raise Exception(f"Communication error: {scs_comm_result}, Error: {scs_error}")
-        return data
-    
+
+
+
+
     def get_Sync_ServosInfo(self):
         """
         Retrieve and update the state information of all servos.
@@ -227,14 +221,14 @@ class ServoControler:
             #print(self.groupSyncRead.data_dict)#Here is all the data that was received
 
             for scs_id in self.servos_info_limitation.keys():
-                # Check if groupsyncread data of SC Servo#1~10 is available            
+                # Check if groupsyncread data of SC Servo#1~10 is available
                 #Check if the data is available
                 #print(scs_id, data_type, values[2])
                 scs_data_result, scs_error = self.groupSyncRead.isAvailable(scs_id, values[2], values[3])
                 if scs_data_result == True:
                     self.servoStack.update_state(scs_id, data_type, self.groupSyncRead.getData(scs_id, values[2], values[3]))
                 else:
-                    #No Update, 
+                    #No Update,
                     #print("[ID:%03d] groupSyncRead getdata failed" % scs_id)
                     pass
 
@@ -249,7 +243,7 @@ class ServoControler:
         """
         # Define the column headers
         headers = ["Servo ID", "Position", "Speed", "Load", "Voltage", "Current", "Temperature", "TorqueEnable"]
-        
+
         # Create the table
         table = PrettyTable()
         table.field_names = headers
@@ -271,10 +265,25 @@ class ServoControler:
         # Print the table
         print(table)
 
+    def read_servo_data(self, servo_id, address, length):
+        if length == 1:
+            data, scs_comm_result, scs_error = self.packetHandler.read1ByteTxRx(servo_id, address)
+        elif length == 2:
+            data, scs_comm_result, scs_error = self.packetHandler.read2ByteTxRx(servo_id, address)
+        elif length == 4:
+            data, scs_comm_result, scs_error = self.packetHandler.read4ByteTxRx(servo_id, address)
+        else:
+            raise ValueError("Invalid length specified")
+
+        # Check if the returned values are valid
+        # if scs_comm_result != 0 or scs_error != 0:
+        #     raise Exception(f"Communication error: {scs_comm_result}, Error: {scs_error}")
+        return data
+
     def ScanServos(self):
         '''
         Scan for servos and returns a list with all the active servos and their id
-    
+
         '''
         #self.servo_maintainer.stop()#stopt the thread, so that the servos can be initialized.
         if self.portHandler is None:
@@ -284,7 +293,7 @@ class ServoControler:
         print(f"Scanning for servos in the range 0 to 20 at {self.BAUDRATE} baud rate...")
         servo_pres = {}
         for servo_id in self.servos_info_limitation.keys():
-            model_number ,result, error = self.packetHandler.ping(servo_id)    
+            model_number ,result, error = self.packetHandler.ping(servo_id)
             print(f"Servo ID: {servo_id}: Model Number {model_number}, Result: {result}, Error: {error}")
             if result == COMM_SUCCESS:
                 print(f"Servo ID: {servo_id}: Model Number {model_number}")
@@ -294,7 +303,7 @@ class ServoControler:
                 servo_pres[servo_id] = None
 
         return servo_pres
-    
+
 
     def setSingleServoPosSpeedAcc(self, Servo_ID, angle, speed, safety_check = False):
         '''
@@ -308,10 +317,10 @@ class ServoControler:
             servo_pos = int(self._map(angle, 180, -180, *self.SCS_MOVABLE_RANGE))
         else:
             servo_pos = int(self._map(angle, -180, 180, *self.SCS_MOVABLE_RANGE))
-           
+
 
         #print(f"Servo ID: {Servo_ID} Angle: {angle}, Servo Pos: {servo_pos}")
-        
+
         #actualize the global servos_actions dict with the new information
         self.servoStack.update_action(Servo_ID, "angle", angle)
         self.servoStack.update_action(Servo_ID, "speed", speed)
@@ -326,7 +335,7 @@ class ServoControler:
 
         #make safety_limitation
         #self.setSafetyLimitation(Servo_ID)
-    
+
     def run_sync_write_commands(self):
         '''
         Run the sync write commands
@@ -346,7 +355,7 @@ class ServoControler:
         Check if the servos are in the right position range
         '''
         if len(list(self.pres_servos_actions.keys())) == 8:
-            
+
             #check if servo 3 and 5 don't collide
             max_angle_dif = -25
             min_angle_dif = -50
@@ -367,7 +376,7 @@ class ServoControler:
                     return self.servoStack.get_action(3, "angle") - min_angle_dif
                 else:
                     return angle
-                
+
             #check if servo 4 and 6 don't collide
             elif Servo_ID == 4:
                 angle_dif = angle - self.servoStack.get_action(6, "angle")
@@ -378,7 +387,7 @@ class ServoControler:
                     return self.servoStack.get_action(6, "angle") + min_angle_dif
                 else:
                     return angle
-                
+
             elif Servo_ID == 6:
                 angle_dif = self.servoStack.get_action(4, "angle") - angle
                 if angle_dif > max_angle_dif:
@@ -387,13 +396,13 @@ class ServoControler:
                     return  self.servoStack.get_action(4, "angle") - min_angle_dif
                 else:
                     return angle
-                
+
             else:
                 return angle
         else:
             return angle
-        
-        
+
+
     def setGroupSync_ServoPosSpeedAcc(self, Servo_IDs:list, angles:list, speed = 4000, accs = 255):
         '''
         Set the position of the servos synchronical
@@ -455,7 +464,7 @@ class ServoControler:
         if type_degree:
             angle = int(self._map(angle, 0, 360, *self.SCS_MOVABLE_RANGE))
         return self.WriteOFS(scs_id, angle)
-    
+
     def defineInitialPosition(self, Servo_ID):
         '''
             When calling this function, the servo will disable the torque, so you can move the servo to the initial position.
@@ -480,7 +489,7 @@ class ServoControler:
 
         self.torque_state(Servo_ID, False)
         return findInitialPosition
-    
+
     def defineAllMiddlePositions(self):
         '''
         Set the middle position for all servos
@@ -497,7 +506,7 @@ class ServoControler:
             scs_comm_result, scs_error = self.packetHandler.write4ByteTxRx(self.portHandler, servo_id, address, value)
         else:
             raise ValueError("Invalid length specified")
-        
+
         # Check if the returned values are valid
         # if scs_comm_result != 0 or scs_error != 0:
         #     raise Exception(f"Communication error: {scs_comm_result}, Error: {scs_error}")
@@ -518,7 +527,8 @@ class ServoControler:
 
 
 
-    
+
+
 
 if __name__=="__main__":
     if os.name == 'nt':
@@ -526,54 +536,58 @@ if __name__=="__main__":
         print('nt')
         def getch():
             return msvcrt.getch().decode()
-        
+
     Controler = ServoControler()
     Controler.ScanServos()
     #Controler.setSingleServoPosSpeedAcc(7, 180, 4000)
     Controler.setSingleServoPosSpeedAcc(3, 180, 4000)
     Controler.run_sync_write_commands()
-    #move servo 7
-    while True:
-        servo_data = Controler.get_Sync_ServosInfo()
-        formatted_data = {}
-        for servo_id, data in servo_data.items():
-            formatted_data[servo_id] = {
-            "Position": round(Controler.servoStack.get_state(servo_id, "PresPos"),3),
-            "Speed": round(Controler.servoStack.get_state(servo_id, "PresSpd"),3),
-            "Load": round(Controler.servoStack.get_state(servo_id, "Load"),3),
-            "Voltage": round(Controler.servoStack.get_state(servo_id, "Voltage"), 2),
-            "Current": round(Controler.servoStack.get_state(servo_id, "Current"),3),
-            "Temperature": Controler.servoStack.get_state(servo_id, "Temperature"),
-            "TorqueEnable": round(Controler.servoStack.get_state(servo_id, "torque_enable"),3),
-            "MobileSign": Controler.servoStack.get_state(servo_id, "mobile_sign")
-            }
-        
-        # Update the table with new data
-        table = PrettyTable()
-        table.field_names = ["Servo ID", "Position", "Speed", "Load", "Voltage", "Current", "Temperature", "TorqueEnable", "MobileSign"]
-        
-        for servo_id, data in formatted_data.items():
-            table.add_row([
-                servo_id,
-                data["Position"],
-                data["Speed"],
-                data["Load"],
-                data["Voltage"],
-                data["Current"],
-                data["Temperature"],
-                data["TorqueEnable"],
-                data["MobileSign"]
-            ])
-        
-        print("\033c", end="")  # Clear the console
-        print(table)
-        time.sleep(0.01)
-   
-        time.sleep(0.01)
+
+    print(Controler.read_servo_data(3, SMS_STS_PRESENT_POSITION_L, 2))
+    time.sleep(0.5)
+
+    # #move servo 7
+    # while True:
+    #     servo_data = Controler.get_Sync_ServosInfo()
+    #     formatted_data = {}
+    #     for servo_id, data in servo_data.items():
+    #         formatted_data[servo_id] = {
+    #         "Position": round(Controler.servoStack.get_state(servo_id, "Pos"),3),
+    #         "Speed": round(Controler.servoStack.get_state(servo_id, "Ppd"),3),
+    #         "Load": round(Controler.servoStack.get_state(servo_id, "Load"),3),
+    #         "Voltage": round(Controler.servoStack.get_state(servo_id, "Voltage"), 2),
+    #         "Current": round(Controler.servoStack.get_state(servo_id, "Current"),3),
+    #         "Temperature": Controler.servoStack.get_state(servo_id, "Temperature"),
+    #         "TorqueEnable": round(Controler.servoStack.get_state(servo_id, "torque_enable"),3),
+    #         "MobileSign": Controler.servoStack.get_state(servo_id, "mobile_sign")
+    #         }
+
+    #     # Update the table with new data
+    #     table = PrettyTable()
+    #     table.field_names = ["Servo ID", "Position", "Speed", "Load", "Voltage", "Current", "Temperature", "TorqueEnable", "MobileSign"]
+
+    #     for servo_id, data in formatted_data.items():
+    #         table.add_row([
+    #             servo_id,
+    #             data["Position"],
+    #             data["Speed"],
+    #             data["Load"],
+    #             data["Voltage"],
+    #             data["Current"],
+    #             data["Temperature"],
+    #             data["TorqueEnable"],
+    #             data["MobileSign"]
+    #         ])
+
+        # print("\033c", end="")  # Clear the console
+        # print(table)
+        # time.sleep(0.01)
+
+        # time.sleep(0.01)
     # Controler.setSingleServoPosSpeedAcc(7, 180, 4000)
     # Controler.run_sync_write_commands()
 
-    
+
 
 
     # while True:
@@ -589,22 +603,22 @@ if __name__=="__main__":
     #     # Controler.setGroupSync_ServoPosSpeedAcc([1,2,3,4,5,6,7,8], [50,50,50,50,50,50,50,50], 4000, 255)
 
     #     #Controler.setGroupSync_ServoPosSpeedAcc([1,2,3,4,5,6,7,8], [0, 0, 0, -66.75000998629827, -66.75000998629827, 0, 0, -25.000010714391994, -25.000010714391994], 4000, 255)
-        
-        
-        
+
+
+
     #     if os.name == 'nt' and msvcrt.kbhit():
     #         key = getch()
     #         if key.upper() == 'Q':
     #             # servo 4,3
     #             print("Terminating loop and turn of torque control.")
-    #             for i in range(1, 9):       
+    #             for i in range(1, 9):
     #                 Controler.torque_state(i, False)
     #             break
 
-    
-    # time.sleep(2) 
+
+    # time.sleep(2)
     # Controler.setGroupSync_ServoPosSpeedAcc([1,2,3,4,5,6,7,8], [0,0,90,90,0,0,0,0], 4000, 255)
-    
+
     # time.sleep(2)
     # Controler.syncRead([1,2,3,4,5,6,7,8])
 
@@ -631,7 +645,7 @@ if __name__=="__main__":
     # time.sleep(2)
     # print(Controler.read_servo_data(4, SMS_STS_PRESENT_POSITION_L, 2))
 
-    
+
     #define the initial position
     # finish_func = Controler.defineInitialPosition(4)
     # print("Move the servo to the initial position")

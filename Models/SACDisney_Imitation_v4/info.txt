@@ -1,0 +1,7 @@
+Model: SAC
+Model Name: Disney_Imitation_v4
+Number of CPUs: 15
+Total Timesteps: 10000000
+Env Parameters: {'ModelType': 'SAC', 'rewards_type': ['Disney_Imitation'], 'observation_type_stacked': ['head_orientation', 'head_acceleration', 'head_angular_velocity', 'joint_torques'], 'observation_type_solo': ['last_action', 'User_command', 'phase_signal'], 'obs_time_space': 1, 'terrain_type': 'flat', 'recorded_movement_file_path_dic': {'PushSprint_v1': 4, 'LeftTurn_v1': 1, 'RightTurn_v1': 1, 'StandingStill_v1': 4}, 'RobotType': 'Rabbit_v3'}
+Hyperparameters: {'learning_rate': 0.004, 'batch_size': 4000, 'buffer_size': 500000, 'policy_kwargs': {'net_arch': {'pi': [512, 512], 'qf': [512, 512]}, 'activation_fn': <class 'torch.nn.modules.activation.ELU'>}, 'gamma': 0.97}
+Used_env_class_filename: RL_Agent_Env

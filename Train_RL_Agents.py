@@ -1,4 +1,4 @@
-#from stable_baselines3 import SAC
+from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     #tr_model_replay_buffer_dir = r"expert_trajectories\recorded_data_sprinting_v1"
 
 
-    alg_name = "SAC"
+    alg_name = "PPO"
     ModellName = "Disney_Imitation_v1"
     main_dir = r"Models\\" + alg_name + ModellName
     models_dir = os.path.join(main_dir, "models")
@@ -68,19 +68,11 @@ if __name__ == "__main__":
     env_param_kwargs = {
         "ModelType": alg_name,
         "rewards_type": ["Disney_Imitation"],
-        "observation_type_stacked": ["head_orientation", "head_acceleration", "head_angular_velocity", "joint_torques"],
-        "observation_type_solo": ["last_action", "User_command", "phase_signal"],
-        "obs_time_space": 1,
+        "observation_type": ["head_orientation", "head_acceleration", "head_angular_acceleration", "joint_torques"],
+        "obs_time_space": 2,
         "terrain_type": "flat",
-        "recorded_movement_file_path_dic": {"Forward_v1": 4,
-                                            "Forward_v2": 2,
-                                            "LeftTurn_v1": 3,
-                                            "RightTurn_v1": 3,
-                                            "Stand_v1": 3,
-                                            "Stand_still_v1": 5,
-                                             },
-        "RobotType":"Rabbit_v3"
-        ""
+        "recorded_movement_file_path_list": [r"Forwardsprinting_v1", 
+                                            ]
     }
 
     if alg_name == "SAC":
@@ -96,7 +88,7 @@ if __name__ == "__main__":
     elif alg_name == "PPO":
         hyper_params = {
             "learning_rate":2.5e-4,  # The paper mentions using an adaptive learning rate
-            "n_steps": 8192 * 24,  # Batch size (envs × steps) in the paper
+            "n_steps": 8192 * 12,  # Batch size (envs × steps) in the paper
             "batch_size": 8192,  # From Table IV in the paper
             "ent_coef": 0.0,  # Entropy coefficient
             "gamma": 0.99,  # Discount factor

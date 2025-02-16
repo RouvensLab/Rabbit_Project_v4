@@ -9,7 +9,7 @@ import pybullet as p
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 sys.path.append(project_root)
 
-from Real_robot.Servo_Controler_v5 import ServoControler
+from Real_robot.ServoSupervisor_v1 import ServoSupervisor
 from Real_robot.Camera_v3 import Camera
 
 class Rabbit_real:
@@ -19,9 +19,9 @@ class Rabbit_real:
     def __init__(self, *args, **kwargs):
         """Initialize the rabbit"""
 
-        self.servoControler = ServoControler()
+        self.servoControler = ServoSupervisor()
         self.servoControler.ScanServos()
-
+        
         #camera and accelerometer
         self.cam = Camera()
 
@@ -282,7 +282,7 @@ class Rabbit_real:
         #update the lifetime
         self.lifetime += timeStep_size
 
-        self.servoControler.get_Sync_ServosInfo()#updates the servo information
+        #self.servoControler.get_Sync_ServosInfo()#updates the servo information
 
         #update action rate
         self.update_action_history([self.servoControler.servoStack.get_state(i, "PresPos") for i in self.Joints_index])# not quiet right. Because servo 1 and 2 are not the same as the one in the simulation

@@ -73,7 +73,7 @@ class TrajectoryRecorder:
     def get_near_data(self, time):
         """Get the data that is closest to the given time"""
         if len(self.trajectory_time) == 0:
-            return None
+            return self.trajectory[0]
         #get the index of the closest time
         index = min(range(len(self.trajectory_time)), key=lambda i: abs(self.trajectory_time[i]-time))
         return self.trajectory[index]
@@ -83,4 +83,17 @@ class TrajectoryRecorder:
         #print(self.trajectory)
         with open(self.trajectory_path, "w") as f:
             json.dump({"data_structure": self.data_structure, "trajectory": self.trajectory, "time": self.trajectory_time}, f)
+
+    def get_trajectory_infos(self):
+        #steps
+        steps = len(self.trajectory)
+        #time
+        time = self.trajectory_time[-1]
+        return steps, time
+    
+
+if __name__=="__main__":
+    trajRec = TrajectoryRecorder()
+    trajRec.load_trajectory("PushSprint_v1")
+    print(trajRec.get_trajectory_infos())
         

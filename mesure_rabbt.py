@@ -244,16 +244,16 @@ class PlotterWidget(QWidget):
             #self.curves_array_body = np.array([np.array([[x, y, z], [x, y, z], ...for every time step]), np.array([[x, y, z], [x, y, z], ...for every time step]), ...for every graph type])
             #add a new dimension to the array
             BodyData_array = np.array(BodyData)
-            print("Bevore", BodyData_array, BodyData_array.shape)
+            #print("Bevore", BodyData_array, BodyData_array.shape)
             BodyData_array = np.expand_dims(BodyData_array, axis=1)
-            print(BodyData_array, BodyData_array.shape)
-            print(self.curves_array_body[:, 1:, :], self.curves_array_body[:, 1:, :].shape)
+            # print(BodyData_array, BodyData_array.shape)
+            # print(self.curves_array_body[:, 1:, :], self.curves_array_body[:, 1:, :].shape)
             # Ensure the dimensions match before concatenation
             self.curves_array_body = np.concatenate([self.curves_array_body[:, 1:, :], BodyData_array], axis=1)
             #for the servo data
             ServoData_array = np.array(ServoData)
             ServoData_array = np.expand_dims(ServoData_array, axis=1)
-            print(ServoData_array, ServoData_array.shape)
+            # print(ServoData_array, ServoData_array.shape)
             self.curves_array_servos = np.concatenate([self.curves_array_servos[:, 1:, :], ServoData_array], axis=1)
 
         else:
@@ -263,12 +263,12 @@ class PlotterWidget(QWidget):
             self.curves_array_servos = np.zeros((len(self.Servos_GraphLabel), self.time_size_limit, len(self.servo_labels)), dtype=np.float16)
 
 
-        print(self.curves_array_body, self.curves_array_body.shape)
+        # print(self.curves_array_body, self.curves_array_body.shape)
         for graph_id, graph_curves in enumerate(self.curves_body):
             for graph_curve_id, curve in enumerate(graph_curves):
                 curve_array = self.curves_array_body[graph_id, :, graph_curve_id]
-                print("Curve array: ", curve_array, curve_array.shape)
-                print("Time array: ", self.time_array, self.time_array.shape)
+                # print("Curve array: ", curve_array, curve_array.shape)
+                # print("Time array: ", self.time_array, self.time_array.shape)
                 curve.setData(self.time_array, curve_array)
 
         for graph_id, graph_curves in enumerate(self.curves_servos):

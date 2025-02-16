@@ -36,7 +36,7 @@ class Simulation:
 
         if rabbit_type == "Rabbit_v3":
             from Objects.Rabbit_v3 import Rabbit
-            self.rabbit = Rabbit([0, 0, 0.3])
+            self.rabbit = Rabbit([0, 0, 0.15])
             self.rabbit.simplify_collision(self.ground._id)
 
         elif rabbit_type == "Rabbit_v3_mesured":
@@ -45,8 +45,8 @@ class Simulation:
             self.rabbit = get_measuredRabbit(Rabbit,
                                             state_types_body=["head_orientation", "head_angular_velocity", "head_acceleration" ], 
                                             state_types_servos=["joint_angles", "joint_velocities", "joint_torques"], 
-                                            trajectory_data_structure= []
-                                             )([0, 0, 0.3])
+                                            trajectory_data_structure= ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities"]
+                                             )([0, 0, 0.15])
         elif rabbit_type == "Rabbit_real_mesured":
             from Real_robot.real_rabbit import Rabbit_real
             from mesure_rabbt import get_measuredRabbit
@@ -54,7 +54,7 @@ class Simulation:
                                             state_types_body=["head_orientation", "head_angular_velocity", "head_acceleration" ], 
                                             state_types_servos=["joint_current", "joint_velocities", "joint_torques"], 
                                             trajectory_data_structure= []
-                                             )([0, 0, 0.3])
+                                             )([0, 0, 0.15])
             #self.rabbit.init_Gui()
         else:
             raise ValueError("Unknown Rabbit type")
@@ -126,13 +126,17 @@ class Simulation:
 if __name__ == "__main__":
     env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
     env.rabbit.create_seperate_Window()
+    env.show_world_coordinate_system()
     #env.rabbit.add_UserControlPanel(all_joints=False)
-    #env.rabbit.get_link_infos()
-    #time.sleep(10000)
+    # env.rabbit.get_link_infos()
+    # time.sleep(10000)
+    funktion = env.rabbit.create_get_informations(["joint_angles"])
     while True:
         print("step start")
         env.Sim_step()
-        env.rabbit.send_goal_pose([1, 1, 0.5, 1, 1, 1, 1, 1])
+        env.rabbit.send_goal_pose([1, 1, 1, 1, 1, 1, 1, 1])
+        print(funktion())
+
         time.sleep(0.01)
         print("step")
 

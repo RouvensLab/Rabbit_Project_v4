@@ -39,6 +39,10 @@ class FlashTrajectoryDeck:
         self.start_trajectory = start_trajectory
         self.first_call = True  # Ensures start trajectory is used first
 
+        self.feedback_col = 0
+        self.feedback_step = 0
+        self.last_trajectory = None
+
     def calculate_priority(self, count, difficulty, feedback_factor):
         """
         Computes the priority score for a trajectory.
@@ -85,6 +89,33 @@ class FlashTrajectoryDeck:
 
         return trajectory
 
+    def update_feedbacks(self):
+        """
+        Receives user feedback on how well the trajectory was imitated.
+
+        Args:
+            trajectory (str): The trajectory that was just executed.
+            score (int): Imitation score (1 = poor, 5 = perfect).
+        """
+        if self.last_trajectory not in self.trajectory_counts:
+            print(f"Warning: {self.last_trajectory} is not in the trajectory list.")
+            return
+        # Convert score to a weight factor (higher score = more delay)
+        # Example: Score 1 (bad) → factor 0.5 (comes back sooner)
+        #          Score 5 (good) → factor 2.0 (delays next appearance)
+        feedback_factor_map = {1: 0.5, 2: 0.75, 3: 1.0, 4: 1.5, 5: 2.0}
+        feedback_factor = feedback_factor_map.get(int(self.feedback_col/self.feedback_step), 1.0)
+
+        # Update trajectory feedback score
+        self.trajectory_feedback[self.last_trajectory] = feedback_factor
+
+        # Compute new priority with difficulty weighting
+        difficulty = self.trajectory_list[self.last_trajectory]
+        new_priority = self.calculate_priority(self.trajectory_counts[self.last_trajectory], difficulty, feedback_factor)
+
+        # Reinsert into the queue with updated priority
+        heapq.heappush(self.trajectory_queue, (new_priority, self.last_trajectory))
+    
     def give_feedback(self, trajectory, score):
         """
         Receives user feedback on how well the trajectory was imitated.
@@ -98,21 +129,9 @@ class FlashTrajectoryDeck:
             print(f"Warning: {trajectory} is not in the trajectory list.")
             return
 
-        # Convert score to a weight factor (higher score = more delay)
-        # Example: Score 1 (bad) → factor 0.5 (comes back sooner)
-        #          Score 5 (good) → factor 2.0 (delays next appearance)
-        feedback_factor_map = {1: 0.5, 2: 0.75, 3: 1.0, 4: 1.5, 5: 2.0}
-        feedback_factor = feedback_factor_map.get(score, 1.0)
-
-        # Update trajectory feedback score
-        self.trajectory_feedback[trajectory] = feedback_factor
-
-        # Compute new priority with difficulty weighting
-        difficulty = self.trajectory_list[trajectory]
-        new_priority = self.calculate_priority(self.trajectory_counts[trajectory], difficulty, feedback_factor)
-
-        # Reinsert into the queue with updated priority
-        heapq.heappush(self.trajectory_queue, (new_priority, trajectory))
+        self.feedback_col += score
+        self.feedback_step += 1
+        self.last_trajectory = trajectory
 
 
 if __name__ == "__main__":
@@ -126,11 +145,11 @@ if __name__ == "__main__":
     deck = FlashTrajectoryDeck(trajectory_list, start_trajectory="path3")
 
     # Get and evaluate trajectories
-    for _ in range(10):
+    for _ in range(100):
         traj = deck.get_trajectory_path()
         print(f"Next trajectory: {traj}")
 
         # Simulating user feedback (random scores for testing)
-        score = random.randint(1, 5)
+        score = int(input("Enter score (1-5): "))
         print(f"User feedback for {traj}: {score}")
         deck.give_feedback(traj, score)
