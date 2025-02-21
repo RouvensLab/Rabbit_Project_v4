@@ -39,14 +39,14 @@ class ServoSupervisor(threading.Thread):
         self.initializing_pause = 3.5
 
         #[index, start_value, address, length, unit]
-        self.servo_state_structure = {"Position": [0, 0, SMS_STS_PRESENT_POSITION_L, 2, [0, 4094, 0, 2*math.pi]], 
-                                        "Velocity": [1, 0, SMS_STS_PRESENT_SPEED_L, 2, [0, 4094, 0, 2*math.pi]], 
-                                        "Load": [2, 0, SMS_STS_PRESENT_LOAD_L, 2, 0.1], 
-                                        "Voltage": [3, 0, SMS_STS_PRESENT_VOLTAGE, 1, 0.1], 
-                                        "Current": [4, 0, SMS_STS_PRESENT_CURRENT_L, 2, 0.0065], 
-                                        "Temperature": [5, 0, SMS_STS_PRESENT_TEMPERATURE, 1, 1], 
-                                        "TorqueEnable": [6, 1, SMS_STS_TORQUE_ENABLE, 1, 1],
-                                        "MobileSign": [7, 0, SMS_STS_MOVING, 1, 1]
+        self.servo_state_structure = {"Position":       [0, 0, SMS_STS_PRESENT_POSITION_L   , 2, [0, 4094, 0, 2*math.pi]], 
+                                        "Velocity":     [1, 0, SMS_STS_PRESENT_SPEED_L      , 2, [0, 4094, 0, 2*math.pi]], 
+                                        "Load":         [2, 0, SMS_STS_PRESENT_LOAD_L       , 2, 0.1], 
+                                        "Voltage":      [3, 0, SMS_STS_PRESENT_VOLTAGE      , 1, 0.1], 
+                                        "Current":      [4, 0, SMS_STS_PRESENT_CURRENT_L    , 2, 0.0065], 
+                                        "Temperature":  [5, 0, SMS_STS_PRESENT_TEMPERATURE  , 1, 1], 
+                                        "TorqueEnable": [6, 1, SMS_STS_TORQUE_ENABLE        , 1, 1],
+                                        "MobileSign":   [7, 0, SMS_STS_MOVING               , 1, 1]
                                         }
 
         # Initialize PortHandler and PacketHandler instances
@@ -120,26 +120,26 @@ class ServoSupervisor(threading.Thread):
         for state_type in data_types:
             if "Position" == state_type:
                 self.add_dataType(state_type)
-                lambda_list.append(lambda: self._map_array(np.array(self.Data_Stack[state_type]), in_min=0, in_max=4094, out_min=-math.pi, out_max=math.pi))
+                lambda_list.append(lambda state_type=state_type: self._map_array(np.array(self.Data_Stack[state_type]), in_min=0, in_max=4094, out_min=-math.pi, out_max=math.pi))
             elif "Velocity" == state_type:
                 self.add_dataType(state_type)
-                lambda_list.append(lambda: self.Data_Stack[state_type])
+                lambda_list.append(lambda state_type=state_type: self.Data_Stack[state_type])
             elif "Load"== state_type:
                 self.add_dataType(state_type)
-                lambda_list.append(lambda: np.array(self.Data_Stack[state_type])*0.1)
+                lambda_list.append(lambda state_type=state_type: np.array(self.Data_Stack[state_type])*0.1)
             elif "Voltage"== state_type:
                 self.add_dataType(state_type)
                 lambda_list.append(lambda: np.array(self.Data_Stack[state_type])*0.1)
             elif "Current"== state_type:
                 self.add_dataType(state_type)
-                lambda_list.append(lambda: np.array(self.Data_Stack[state_type])*0.0065)
+                lambda_list.append(lambda state_type=state_type: np.array(self.Data_Stack[state_type])*0.0065)
             elif "Temperature"== state_type:
                 self.add_dataType(state_type)
-                lambda_list.append(lambda: self.Data_Stack[state_type])
+                lambda_list.append(lambda state_type=state_type: self.Data_Stack[state_type])
             elif "TorqueEnable"== state_type:
                 self.add_dataType(state_type)
                 #converts the 1 to True and 0 to False
-                lambda_list.append(lambda: np.array(self.Data_Stack[state_type])==1)
+                lambda_list.append(lambda state_type=state_type: np.array(self.Data_Stack[state_type])==1)
             elif "MobileSign"== state_type:
                 self.add_dataType(state_type)
                 lambda_list.append(lambda: np.array(self.Data_Stack[state_type])==1)
@@ -167,9 +167,11 @@ class ServoSupervisor(threading.Thread):
         if data_type not in self.upToDate_dataTypes:
             self.upToDate_dataTypes.append(data_type)
             #add the data_type to the GroupSyncReads
-            print(self.servo_state_structure[data_type][2], self.servo_state_structure[data_type][3])
-            groupSyncRead_obj = GroupSyncRead(self.packetHandler, self.servo_state_structure[data_type][2], self.servo_state_structure[data_type][3])
-            groupSyncRead_obj.clearParam()
+            print(f"ADR: {self.servo_state_structure[data_type][2]}, Lenght: {self.servo_state_structure[data_type][3]}")
+            groupSyncRead_obj = GroupSyncRead(ph=self.packetHandler, 
+                                              start_address=self.servo_state_structure[data_type][2], 
+                                              data_length=self.servo_state_structure[data_type][3])
+            #groupSyncRead_obj.clearParam()
             for servoID in self.servoIDs:
                 scs_addparam_result = groupSyncRead_obj.addParam(servoID)#false means that the scs_id was already added
                 if scs_addparam_result != True:
@@ -185,10 +187,31 @@ class ServoSupervisor(threading.Thread):
             self.Data_Stack.pop(data_type)
 
     def update_states(self):
+        """
+        Updates the states of the servos by reading data from each servo and storing it in the Data_Stack.
+        This method performs the following steps:
+        1. Checks if there are any data types to be read. If not, prints an error message and returns.
+        2. Iterates over each data type and its corresponding GroupSyncRead object.
+        3. Sends a packet and receives data using the GroupSyncRead object.
+        4. Checks if the communication was successful. If not, prints an error message.
+        5. For each servo ID, checks if the data is available. If not, prints an error message.
+        6. If the data is available, retrieves the data and stores it in the Data_Stack.
+        7. Clears the parameters of the GroupSyncRead object.
+        Attributes:
+            upToDate_dataTypes (list): List of data types to be read.
+            GroupSyncReads (dict): Dictionary mapping data types to GroupSyncRead objects.
+            servo_state_structure (dict): Dictionary containing servo state structure information.
+            servoIDs (list): List of servo IDs.
+            Data_Stack (dict): Dictionary to store the read data.
+            showErrors (bool): Flag to indicate whether to show error messages.
+        Returns:
+            None
+        """
         if len(self.upToDate_dataTypes) == 0:
             print("Error: No data types to be read")
             return
         for dataType, groupSync_obj in self.GroupSyncReads.items():
+            
             scs_comm_result = groupSync_obj.txRxPacket()#send the packet and receive the data
             if scs_comm_result != COMM_SUCCESS:
                 print(f"Error reading {dataType} data") if self.showErrors else None
@@ -247,6 +270,18 @@ class ServoSupervisor(threading.Thread):
     def run(self):
         print("Starting thread ????")
         while True:
+
+            #print(self.packetHandler.ReadAll(1))
+
+            print(self.packetHandler.ReadCurrent(sts_id=1))
+            print(self.packetHandler.ReadCurrent(sts_id=2))
+            print(self.packetHandler.ReadCurrent(sts_id=3))
+            print(self.packetHandler.ReadCurrent(sts_id=4))
+            print(self.packetHandler.ReadCurrent(sts_id=5))
+            print(self.packetHandler.ReadCurrent(sts_id=6))
+            print(self.packetHandler.ReadCurrent(sts_id=7))
+            print(self.packetHandler.ReadCurrent(sts_id=8))
+
             if not self.action_queue.empty():
                 # Execute the actions in the queue
                 action = self.action_queue.get()
@@ -254,9 +289,11 @@ class ServoSupervisor(threading.Thread):
                     # Execute the action
                     self.send_command(action["positions"], action["speeds"])
                     self.action_queue.task_done()
-                time.sleep(0.005)
+                #time.sleep(0.005)
             else:
                 # If no actions are available, update the states
+                
+                #
                 self.update_states()
             
             #show the current states
@@ -268,7 +305,7 @@ class ServoSupervisor(threading.Thread):
 if __name__ == "__main__":
     # Usage example
     supervisor = ServoSupervisor()
-    getFunction = supervisor.create_get_informations(["Position", "Velocity", "Load", "Current", "TorqueEnable"])
+    getFunction = supervisor.create_get_informations(["Position"]) #"Velocity", "Load", "Current", "TorqueEnable"
     supervisor.start_run()
 
     for i in range(10):

@@ -1,0 +1,51 @@
+2025-02-17 00:55:56,731 - DEBUG - Received packet: [255, 255, 1, 2, 0, 252], Result: 0
+2025-02-17 00:55:56,732 - DEBUG - Transmitted packet: [255, 255, 1, 2, 1, 251], Received packet: [255, 255, 1, 2, 0, 252], Result: 0, Error: 0
+2025-02-17 00:55:56,732 - DEBUG - Transmitted parameters: [251], Received parameters: [252]
+2025-02-17 00:55:56,748 - DEBUG - Received packet: [255, 255, 1, 4, 0, 9, 3, 238], Result: 0
+2025-02-17 00:55:56,748 - DEBUG - Transmitted packet: [255, 255, 1, 4, 2, 3, 2, 243], Received packet: [255, 255, 1, 4, 0, 9, 3, 238], Result: 0, Error: 0
+2025-02-17 00:55:56,748 - DEBUG - Transmitted parameters: [3, 2, 243], Received parameters: [9, 3, 238]
+2025-02-17 00:55:56,761 - DEBUG - Received packet: [255, 255, 2, 2, 0, 251], Result: 0
+2025-02-17 00:55:56,761 - DEBUG - Transmitted packet: [255, 255, 2, 2, 1, 250], Received packet: [255, 255, 2, 2, 0, 251], Result: 0, Error: 0
+2025-02-17 00:55:56,761 - DEBUG - Transmitted parameters: [250], Received parameters: [251]
+2025-02-17 00:55:56,776 - DEBUG - Received packet: [255, 255, 2, 4, 0, 9, 3, 237], Result: 0
+2025-02-17 00:55:56,777 - DEBUG - Transmitted packet: [255, 255, 2, 4, 2, 3, 2, 242], Received packet: [255, 255, 2, 4, 0, 9, 3, 237], Result: 0, Error: 0
+2025-02-17 00:55:56,777 - DEBUG - Transmitted parameters: [3, 2, 242], Received parameters: [9, 3, 237]
+2025-02-17 00:55:56,790 - DEBUG - Received packet: [255, 255, 3, 2, 0, 250], Result: 0
+2025-02-17 00:55:56,790 - DEBUG - Transmitted packet: [255, 255, 3, 2, 1, 249], Received packet: [255, 255, 3, 2, 0, 250], Result: 0, Error: 0
+2025-02-17 00:55:56,790 - DEBUG - Transmitted parameters: [249], Received parameters: [250]
+2025-02-17 00:55:56,806 - DEBUG - Received packet: [255, 255, 3, 4, 0, 9, 3, 236], Result: 0
+2025-02-17 00:55:56,807 - DEBUG - Transmitted packet: [255, 255, 3, 4, 2, 3, 2, 241], Received packet: [255, 255, 3, 4, 0, 9, 3, 236], Result: 0, Error: 0
+2025-02-17 00:55:56,807 - DEBUG - Transmitted parameters: [3, 2, 241], Received parameters: [9, 3, 236]
+2025-02-17 00:55:56,819 - DEBUG - Received packet: [255, 255, 4, 2, 0, 249], Result: 0
+2025-02-17 00:55:56,819 - DEBUG - Transmitted packet: [255, 255, 4, 2, 1, 248], Received packet: [255, 255, 4, 2, 0, 249], Result: 0, Error: 0
+2025-02-17 00:55:56,819 - DEBUG - Transmitted parameters: [248], Received parameters: [249]
+2025-02-17 00:55:56,835 - DEBUG - Received packet: [255, 255, 4, 4, 0, 9, 3, 235], Result: 0
+2025-02-17 00:55:56,835 - DEBUG - Transmitted packet: [255, 255, 4, 4, 2, 3, 2, 240], Received packet: [255, 255, 4, 4, 0, 9, 3, 235], Result: 0, Error: 0
+2025-02-17 00:55:56,835 - DEBUG - Transmitted parameters: [3, 2, 240], Received parameters: [9, 3, 235]
+2025-02-17 00:55:56,848 - DEBUG - Received packet: [255, 255, 5, 2, 0, 248], Result: 0
+2025-02-17 00:55:56,848 - DEBUG - Transmitted packet: [255, 255, 5, 2, 1, 247], Received packet: [255, 255, 5, 2, 0, 248], Result: 0, Error: 0
+2025-02-17 00:55:56,848 - DEBUG - Transmitted parameters: [247], Received parameters: [248]
+2025-02-17 00:55:56,864 - DEBUG - Received packet: [255, 255, 5, 4, 0, 9, 3, 234], Result: 0
+2025-02-17 00:55:56,864 - DEBUG - Transmitted packet: [255, 255, 5, 4, 2, 3, 2, 239], Received packet: [255, 255, 5, 4, 0, 9, 3, 234], Result: 0, Error: 0
+2025-02-17 00:55:56,864 - DEBUG - Transmitted parameters: [3, 2, 239], Received parameters: [9, 3, 234]
+2025-02-17 00:55:56,877 - DEBUG - Received packet: [255, 255, 6, 2, 0, 247], Result: 0
+2025-02-17 00:55:56,877 - DEBUG - Transmitted packet: [255, 255, 6, 2, 1, 246], Received packet: [255, 255, 6, 2, 0, 247], Result: 0, Error: 0
+2025-02-17 00:55:56,877 - DEBUG - Transmitted parameters: [246], Received parameters: [247]
+2025-02-17 00:55:56,893 - DEBUG - Received packet: [255, 255, 6, 4, 0, 9, 3, 233], Result: 0
+2025-02-17 00:55:56,893 - DEBUG - Transmitted packet: [255, 255, 6, 4, 2, 3, 2, 238], Received packet: [255, 255, 6, 4, 0, 9, 3, 233], Result: 0, Error: 0
+2025-02-17 00:55:56,893 - DEBUG - Transmitted parameters: [3, 2, 238], Received parameters: [9, 3, 233]
+2025-02-17 00:55:56,906 - DEBUG - Received packet: [255, 255, 7, 2, 0, 246], Result: 0
+2025-02-17 00:55:56,907 - DEBUG - Transmitted packet: [255, 255, 7, 2, 1, 245], Received packet: [255, 255, 7, 2, 0, 246], Result: 0, Error: 0
+2025-02-17 00:55:56,907 - DEBUG - Transmitted parameters: [245], Received parameters: [246]
+2025-02-17 00:55:56,922 - DEBUG - Received packet: [255, 255, 7, 4, 0, 9, 3, 232], Result: 0
+2025-02-17 00:55:56,922 - DEBUG - Transmitted packet: [255, 255, 7, 4, 2, 3, 2, 237], Received packet: [255, 255, 7, 4, 0, 9, 3, 232], Result: 0, Error: 0
+2025-02-17 00:55:56,922 - DEBUG - Transmitted parameters: [3, 2, 237], Received parameters: [9, 3, 232]
+2025-02-17 00:55:56,935 - DEBUG - Received packet: [255, 255, 8, 2, 0, 245], Result: 0
+2025-02-17 00:55:56,935 - DEBUG - Transmitted packet: [255, 255, 8, 2, 1, 244], Received packet: [255, 255, 8, 2, 0, 245], Result: 0, Error: 0
+2025-02-17 00:55:56,935 - DEBUG - Transmitted parameters: [244], Received parameters: [245]
+2025-02-17 00:55:56,951 - DEBUG - Received packet: [255, 255, 8, 4, 0, 9, 3, 231], Result: 0
+2025-02-17 00:55:56,951 - DEBUG - Transmitted packet: [255, 255, 8, 4, 2, 3, 2, 236], Received packet: [255, 255, 8, 4, 0, 9, 3, 231], Result: 0, Error: 0
+2025-02-17 00:55:56,951 - DEBUG - Transmitted parameters: [3, 2, 236], Received parameters: [9, 3, 231]
+2025-02-17 00:56:01,395 - DEBUG - Received packet: [255, 255, 1, 13, 0, 211, 7, 0, 0, 21, 0, 123, 37, 0, 0, 0, 98], Result: 0
+2025-02-17 00:56:01,395 - DEBUG - Transmitted packet: [255, 255, 1, 4, 2, 56, 11, 181], Received packet: [255, 255, 1, 13, 0, 211, 7, 0, 0, 21, 0, 123, 37, 0, 0, 0, 98], Result: 0, Error: 0
+2025-02-17 00:56:01,395 - DEBUG - Transmitted parameters: [56, 11, 181], Received parameters: [211, 7, 0, 0, 21, 0, 123, 37, 0, 0, 0, 98]

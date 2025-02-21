@@ -227,7 +227,7 @@ class Rabbit:
         """
         #create a list of all the status types
         lambda_list = []
-        #["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "joint_action_rate", "joint_action_acceleration"]
+        ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "joint_action_rate", "joint_action_acceleration"]
         for state_type in status_types:
             if "base_position"== state_type:
                 lambda_list.append(lambda: p.getBasePositionAndOrientation(self._id)[0])

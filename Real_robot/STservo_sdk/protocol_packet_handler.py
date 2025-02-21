@@ -23,8 +23,17 @@ ERRBIT_OVERLOAD = 32
 
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Disable logging
+logging.disable(logging.CRITICAL)
+
+# Configure logging to save to a file with table-style formatting
+#logging.basicConfig(
+#    level=logging.DEBUG,
+#    format='%(asctime)s\t%(levelname)s\t%(message)s',
+#    filename='/c:/Users/kevin/Documents/_Coding/Projects/Rabbit_Project_v4/logs/protocol_packet_handler.log',
+#    filemode='w'  # 'w' to overwrite the log file each time, 'a' to append to the log file
+#)
 
 class protocol_packet_handler(object):
     def __init__(self, portHandler, protocol_end):
@@ -256,6 +265,7 @@ class protocol_packet_handler(object):
             error = rxpacket[PKT_ERROR]
 
         logging.debug(f"Transmitted packet: {txpacket}, Received packet: {rxpacket}, Result: {result}, Error: {error}")
+        logging.debug(f"Transmitted parameters: {txpacket[PKT_PARAMETER0:]}, Received parameters: {rxpacket[PKT_PARAMETER0:]}")
         return rxpacket, result, error
 
     def ping(self, sts_id):
