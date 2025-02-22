@@ -12,8 +12,9 @@ from Real_robot.real_rabbit import Rabbit_real
 class RL_Env(Env):
     def __init__(self,
                 ModelType="SAC",
-                gui = True, 
-                observation_type_stacked=["head_orientation", "head_acceleration", "head_angular_velocity", "joint_torques"],
+                gui = True,
+                render_mode = "human",
+                observation_type_stacked=["head_orientation", "head_linear_acceleration", "head_angular_velocity", "joint_torques"],
                 observation_type_solo=["phase_signal", "last_action", "User_command"],
                 simulation_Timestep = 0.1,
                 obs_time_space = 1, #in seconds
@@ -30,9 +31,17 @@ class RL_Env(Env):
         self.obs_time_space = obs_time_space
 
         self.gui = gui
+        self.render_mode = render_mode
         self.n_steps = 0
 
-        self.rabbit = Rabbit_real()
+        #self.rabbit = Rabbit_real()
+        from mesure_rabbt import get_measuredRabbit 
+        self.rabbit = get_measuredRabbit(Rabbit_real,
+                                        state_types_body=["head_orientation", "head_linear_acceleration", "head_angular_velocity"], 
+                                        state_types_servos=["joint_torques", "joint_velocities", "joint_angles"], 
+                                        trajectory_data_structure= ["joint_torques"]
+                                            )()
+        self.rabbit.create_seperate_Window()
         
         self.action_low_high = [-1, 1]
         self.observation_low_high = [-1, 1]
@@ -42,7 +51,7 @@ class RL_Env(Env):
 
         observation_type_sizes = {
             "head_orientation": 3,
-            "head_acceleration": 3,
+            "head_linear_acceleration": 3,
             "head_angular_acceleration": 3,
             "base_position": 3,
             "base_orientation": 3,
@@ -130,7 +139,6 @@ class RL_Env(Env):
             else:
                 _array = np.clip(obs, -1, 1)
                 observation = np.concatenate([observation, _array])
-            #print(len(_array))
 
         #print("stacked_obs", len(observation))
          # Append the new observation to the stack
@@ -169,10 +177,8 @@ class RL_Env(Env):
         self.rabbit.send_goal_pose(action)
         #simulate the environment
         self.rabbit.step(timeStep_size=self.simulation_Timestep)
-
-
-        
-
+        #render the environment
+        self.render()
         #get the outputs
         observations = self.get_observation()
         reward = 0
@@ -185,7 +191,7 @@ class RL_Env(Env):
         self.n_steps += 1
         self.last_action = self.current_action
         self.last2_action = self.last_action
-        print("reward: ", reward, "\n action: ", action ,"\n observations: ", observations)
+        #print("reward: ", reward, "\n action: ", action ,"\n observations: ", observations)
         
         return observations, reward, terminated, truncated, info
 
@@ -217,6 +223,14 @@ class RL_Env(Env):
         #print("reset obs",len(observations))
 
         return observations, {}
+    
+    def render(self):
+        if self.render_mode == "human":
+            if not hasattr(self, "last_time"):
+                self.last_time = time.time()
+            if self.simulation_Timestep-(time.time()-self.last_time) > 0:
+                time.sleep(self.simulation_Timestep-(time.time()-self.last_time))
+            self.last_time = time.time()
 
     def close(self):
         pass
@@ -261,10 +275,10 @@ if __name__ == "__main__":
     env.reset()
     for _ in range(1000):
         action = env.action_space.sample()
+        print(action)
         obs, rew, done, trunc, info = env.step(action)
         if done:
             env.reset()
-        time.sleep(0.01)
     env.close()
 
 

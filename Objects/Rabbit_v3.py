@@ -227,7 +227,7 @@ class Rabbit:
         """
         #create a list of all the status types
         lambda_list = []
-        ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "joint_action_rate", "joint_action_acceleration"]
+        #["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "joint_action_rate", "joint_action_acceleration"]
         for state_type in status_types:
             if "base_position"== state_type:
                 lambda_list.append(lambda: p.getBasePositionAndOrientation(self._id)[0])
@@ -237,14 +237,15 @@ class Rabbit:
                 lambda_list.append(lambda: p.getBaseVelocity(self._id)[0])
             elif "base_angular_velocity"== state_type:
                 lambda_list.append(lambda: p.getBaseVelocity(self._id)[1])
+
             elif "head_orientation"== state_type:
                 lambda_list.append(lambda: self.get_head_sensors()[0])
+            elif "head_angular_velocity"== state_type:
+                lambda_list.append(lambda: self.get_head_sensors()[1])
             elif "head_linear_velocity"== state_type:
-                lambda_list.append(lambda: self.get_head_sensors()[1])
-            elif "head_acceleration"== state_type:
-                lambda_list.append(lambda: self.get_head_sensors()[1])
-            elif "head_angular_acceleration"== state_type:
                 lambda_list.append(lambda: self.get_head_sensors()[2])
+            elif "head_linear_acceleration"== state_type:
+                lambda_list.append(lambda: self.get_head_sensors()[3])
 
             elif "joint_angles" == state_type:
                 lambda_list.append(lambda:  self.convert_12_to_8_motors([p.getJointState(self._id, i)[0] for i in self.Joints_index]))
@@ -275,6 +276,12 @@ class Rabbit:
         """Get the lifetime of the robot
         """
         return self.lifetime
+    
+    def get_head_sensors(self):
+        """Get the orientation and velocity of the robot
+        return: linkWorldOrientation, #worldLinkAngularVelocity, worldLinkLinearAcceleration
+        """
+        return self.linkWorldOrientation, self.worldLinkAngularVelocity, self.worldLinkLinearVelocity, self.worldLinkLinearAcceleration
     
     def update_head_sensors(self):
         """Get the orientation and velocity of the robot
@@ -307,14 +314,10 @@ class Rabbit:
         #         self.worldLinkAngularVelocity = (np.array(worldLinkAngularVelocity)-np.array(self.worldLinkAngularVelocity_last[0]))/(self.lifetime - self.worldLinkAngularVelocity_last[1])
         # self.worldLinkAngularVelocity_last = [worldLinkAngularVelocity, self.lifetime]
         self.worldLinkAngularVelocity = worldLinkAngularVelocity
+        self.worldLinkLinearVelocity = worldLinkLinearVelocity
 
         
     
-    def get_head_sensors(self):
-        """Get the orientation and velocity of the robot
-        return: linkWorldOrientation, #worldLinkAngularVelocity, worldLinkLinearAcceleration
-        """
-        return self.linkWorldOrientation, self.worldLinkLinearAcceleration, self.worldLinkAngularVelocity
     
     def update_action_history(self, actions):
         """

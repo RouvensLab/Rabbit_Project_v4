@@ -43,7 +43,7 @@ class Simulation:
             from Objects.Rabbit_v3 import Rabbit
             from mesure_rabbt import get_measuredRabbit 
             self.rabbit = get_measuredRabbit(Rabbit,
-                                            state_types_body=["head_orientation", "head_angular_velocity", "head_acceleration" ], 
+                                            state_types_body=["head_orientation", "head_angular_velocity", "head_linear_acceleration" ], 
                                             state_types_servos=["joint_angles", "joint_velocities", "joint_torques"], 
                                             trajectory_data_structure= ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities"]
                                              )([0, 0, 0.15])
@@ -51,7 +51,7 @@ class Simulation:
             from Real_robot.real_rabbit import Rabbit_real
             from mesure_rabbt import get_measuredRabbit
             self.rabbit = get_measuredRabbit(Rabbit_real,
-                                            state_types_body=["head_orientation", "head_angular_velocity", "head_acceleration" ], 
+                                            state_types_body=["head_orientation", "head_angular_velocity", "head_linear_acceleration" ], 
                                             state_types_servos=["joint_current", "joint_velocities", "joint_torques"], 
                                             trajectory_data_structure= []
                                              )([0, 0, 0.15])

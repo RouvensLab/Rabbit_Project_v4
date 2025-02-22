@@ -18,9 +18,15 @@ class Rabbit_real:
     
     def __init__(self, *args, **kwargs):
         """Initialize the rabbit"""
+        #get the names of the joints
+        self.Joints_index = [1, 2,   3, 5,   4, 6,   7, 8]
+        self.numMotors = 8
 
-        self.servoControler = ServoSupervisor()
+        self.servoControler = ServoSupervisor(servo_id_order=self.Joints_index)
         self.servoControler.ScanServos()
+        self.servoControler.start_run()
+
+
         
         #camera and accelerometer
         self.cam = Camera()
@@ -34,9 +40,6 @@ class Rabbit_real:
 
 
 
-        #get the names of the joints
-        self.Joints_index = [1, 2,   3, 5,   4, 6,   7, 8]
-        self.numMotors = 8
 
         self.Motors_range = [(-0.610865, 0.785398), (-0.523599, 0.523599), (-0.785398, 0.261799), (-0.523599, 0.523599), (-2.268928, 0.174533), (-1.047198, 0.785398), (-0.785398, 0.785398), (-2.268928, 0.174533), (-0.785398, 1.047198), (-0.785398, 0.785398), (-1.570796, 1.047198), (-1.570796, 1.047198)]
         
@@ -133,38 +136,32 @@ class Rabbit_real:
 
         This allows us to save resources, like RAM, because we can only get the informations we need.
         """
+        self.servoControler.stop_run()
         #create a list of all the status types
         lambda_list = []
-        #["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "joint_action_rate", "joint_action_acceleration"]
+        left_joint_types = []
+        joint_types = ["joint_angles", "joint_torques", "joint_velocities", "joint_currents", "joint_voltages", "joint_temperatures"]
+        trans_types = ["Position", "Load", "Velocity", "Current", "Voltage", "Temperature"]
         for state_type in status_types:
             if "head_orientation"== state_type:
                 lambda_list.append(lambda: self.get_head_sensors()[0])
             elif "head_angular_velocity"== state_type:
                 lambda_list.append(lambda: self.get_head_sensors()[1])
-            elif "head_acceleration"== state_type:
+            elif "head_linear_acceleration"== state_type:
                 lambda_list.append(lambda: self.get_head_sensors()[2])
-
-            elif "joint_angles" == state_type:
-                lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "PresPos") for i in self.Joints_index])
-            elif "joint_torques" == state_type:
-                lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "Load") for i in self.Joints_index])
-            elif "joint_velocities"== state_type:
-                lambda_list.append(lambda:  [self.servoControler.servoStack.get_state(i, "PresSpd") for i in self.Joints_index])
-            elif "joint_current" == state_type:
-                lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "Current") for i in self.Joints_index])
-            elif "joint_voltage" == state_type:
-                lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "Voltage") for i in self.Joints_index])
-            elif "joint_temperature" == state_type:
-                lambda_list.append(lambda: [self.servoControler.servoStack.get_state(i, "Temperature") for i in self.Joints_index])
-            elif "joint_action_rate"== state_type:
-                lambda_list.append(lambda: self.get_action_rate())
-            elif "joint_action_acceleration"== state_type:
-                lambda_list.append(lambda: self.get_action_acceleration())
+            elif state_type in joint_types:
+                transformed_state_type = trans_types[joint_types.index(state_type)]
+                left_joint_types.append(transformed_state_type)
+                lambda_list.append(self.servoControler.create_get_inf(transformed_state_type))
 
             elif "vision"== state_type:
                 #get the camera image from the camera at the head of the rabbit
                 lambda_list.append(lambda: self.get_camera_image())
-
+            else:
+                raise ValueError(f"Unknown state type: {state_type}")
+        
+        #create a getfunction
+        self.servoControler.continiu_run()
         def get_informations():
             return [func() for func in lambda_list]
 
@@ -257,20 +254,21 @@ class Rabbit_real:
         servo_positions[5] = self.get_Motor2_inverse_kinematics(servo_positions[4], servo_positions[5])
 
         #transform the spine joint angles
-        servo_positions[0] = np.clip(servo_positions[1]*-90+servo_positions[0]*-90, -45, 45)/180*math.pi
-        servo_positions[1] = np.clip(servo_positions[1]*90+servo_positions[0]*-90, -45, 45)/180*math.pi
+        servo_positions[0] = np.clip(servo_positions[1]*-45+servo_positions[0]*-45, -45, 45)/180*math.pi
+        servo_positions[1] = np.clip(servo_positions[1]*45+servo_positions[0]*-45, -45, 45)/180*math.pi
 
         self.send_motor_commands(servo_positions)
 
         
 
     def send_motor_commands(self, motor_commands):
-        """Send motor commands to the robot
+        """Send motor commands to the robot in radians
         motor_commands: list with the motor commands in the order of the motors
-        
         """
-
-        self.servoControler.setGroupSync_ServoPosSpeedAcc(self.Joints_index, motor_commands)     
+        #convert radians to 2000 to -2000
+        motor_commands = np.array(motor_commands)*2047/np.pi
+        print("motor_commands", motor_commands)
+        self.servoControler.action_queue.put({"positions": motor_commands, "speeds": [1000]*8})     
 
 
     
@@ -285,7 +283,7 @@ class Rabbit_real:
         #self.servoControler.get_Sync_ServosInfo()#updates the servo information
 
         #update action rate
-        self.update_action_history([self.servoControler.servoStack.get_state(i, "PresPos") for i in self.Joints_index])# not quiet right. Because servo 1 and 2 are not the same as the one in the simulation
+        self.update_action_history(self.servoControler.get_ServoStates("Position"))# not quiet right. Because servo 1 and 2 are not the same as the one in the simulation
 
 
 
@@ -342,7 +340,7 @@ class Rabbit_real:
         a1 = self._map(FrontHip_angle, -math.pi, math.pi, 0, 2*math.pi)
         a2 = 0.5*math.pi-Knee_angle
 
-        print("a1:", a1/pi*180, "a2:", a2/pi*180, "Knee_angle:", Knee_angle/pi*180, "FrontHip_angle:", FrontHip_angle/pi*180)
+        #print("a1:", a1/pi*180, "a2:", a2/pi*180, "Knee_angle:", Knee_angle/pi*180, "FrontHip_angle:", FrontHip_angle/pi*180)
 
 
         #calculate the angle of the BackHip
@@ -387,7 +385,7 @@ class Rabbit_real:
         b1 = phi1+phi2
         m2 = np.array([math.cos(b1+pi)*S2, math.sin(b1+pi)*S2])
         m3 = t1_vec-m2
-        print("phi1: ", phi1, "phi2: ", phi2, t1_vec, "b1", b1/pi*180)
+        #print("phi1: ", phi1, "phi2: ", phi2, t1_vec, "b1", b1/pi*180)
 
 
         return b1
