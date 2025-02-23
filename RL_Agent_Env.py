@@ -388,7 +388,7 @@ class RL_Env(Env):
         return observations, {}
 
     def close(self):
-        pass
+        self.simulation.close()
 
     def seed(self, seed=None):
         pass

@@ -8,11 +8,13 @@ from PySide6.QtWidgets import (
     QApplication,  QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,QStatusBar,
     QPushButton, QHeaderView, QMessageBox, QSlider, QFileDialog, QLabel, QCheckBox, QComboBox, QMainWindow, QTabWidget
 )
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt,QSettings
 
 from RL_Agent_Env import RL_Env
+from RL_Robot_Env import RL_Robot
 from stable_baselines3 import SAC
-from tools.Controler import ControlInput
+# from tools.Controler import ControlInput
 
 
 class ExtendedTableWidget(QTableWidget):
@@ -164,25 +166,21 @@ class ActionTimetableEditor(QMainWindow):
 
 
         # Restore geometry and state
-        self.restore_geometry()
+        #self.restore_geometry()
 
-        self.def_env_param_kwargs = {
+        self.def_RlEnv_param_kwargs = {
         "ModelType": "SAC",
-        "rewards_type": ["Disney_Imitation"],
+        "rewards_type": [],
         "observation_type_stacked": [],
         "observation_type_solo": ["phase_signal"],
         "terrain_type": "flat",
         "recorded_movement_file_path_dic": {"PushSprint_v1": 5}, 
         "restriction_2D": False
     }
-        self.env_param_kwargs = self.def_env_param_kwargs
-        self.env_startup_parms = {"render_mode": "human", "real_robot": False, "gui": True, "RobotType":"Rabbit_v3_mesured"}
-        self.env = RL_Env(**self.env_startup_parms, **self.env_param_kwargs)
-        self.env.simulation.hung = True
-        self.RabbitMesure_widget = self.env.simulation.rabbit.create_GuiWidget()
-        #Implement that the rabbit unpause the simulation, when the recording is started
-        self.RabbitMesure_widget.TrajRecorder.start_recording_signal.connect(lambda: self.pause_unpause_simulation(False))
-        self.RabbitMesure_widget.TrajRecorder.stop_recording_signal.connect(lambda: self.pause_unpause_simulation(True))
+        self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
+        self.RlEnv_startup_parms = {"render_mode": "human", "real_robot": False, "gui": True, "RobotType":"Rabbit_v3_mesured"}
+        self._init_RlEnv()
+        self.RlEnv.simulation.hung = True
 
         self.manual_exp = ManualExpert(sim_freq=5)
         self.loaded_model = None
@@ -191,6 +189,20 @@ class ActionTimetableEditor(QMainWindow):
 
         self.control_input = None
 
+        # Create the Real Robot
+        self.RLRobot_param_kwargs = {
+            "ModelType": "SAC",
+            "RobotType": "Rabbit_mesured",
+            "observation_type_stacked": [],
+            "observation_type_solo": ["phase_signal"],
+            "simulation_Timestep": 0.1,
+            "obs_time_space": 1,
+        }
+        self.RLRobot_starup_parms = {"render_mode": "fast", "gui": True}
+        self.RlRobot = None
+        self.RealRabbitMesure_widget = QWidget()
+        #self._init_RlRobot()
+
 
         self.env_pause = False
         self.simulation_thread = None
@@ -198,6 +210,36 @@ class ActionTimetableEditor(QMainWindow):
         self.simulation_thread = threading.Thread(target=self.run_simulation_with_error_handling)
         self.simulation_thread.start()
         #self.simulation_thread.join()
+
+    def _init_RlEnv(self):
+        #from RL_Agent_Env import RL_Env
+        self.RlEnv:RL_Env = RL_Env(**self.RlEnv_startup_parms, **self.RlEnv_param_kwargs)
+        self.RabbitMesure_widget = self.RlEnv.simulation.rabbit.create_GuiWidget()
+        #Implement that the rabbit unpause the simulation, when the recording is started
+        self.RabbitMesure_widget.TrajRecorder.start_recording_signal.connect(lambda: self.pause_unpause_simulation(False))
+        self.RabbitMesure_widget.TrajRecorder.stop_recording_signal.connect(lambda: self.pause_unpause_simulation(True))
+
+        #update the self.SimObservation_tab and show again
+        if hasattr(self, "SimObservation_tab"):
+            self.SimObservation_tab.setLayout(QVBoxLayout())
+            self.SimObservation_tab.layout().addWidget(self.RabbitMesure_widget)
+
+    def _init_RlRobot(self):
+        #Real Robot
+        #from RL_Robot_Env import RL_Robot
+        self.RlRobot = RL_Robot(**self.RLRobot_starup_parms, **self.RLRobot_param_kwargs)
+        self.RealRabbitMesure_widget = self.RlRobot.rabbit.create_GuiWidget()
+        #Implement that the rabbit unpause the simulation, when the recording is started
+        self.RealRabbitMesure_widget.TrajRecorder.start_recording_signal.connect(lambda: self.pause_unpause_simulation(False))
+        self.RealRabbitMesure_widget.TrajRecorder.stop_recording_signal.connect(lambda: self.pause_unpause_simulation(True))
+
+        #update the self.RealObservation_tab and show again
+        if hasattr(self, "RealObservation_tab"):
+            self.RealObservation_tab.setLayout(QVBoxLayout())
+            self.RealObservation_tab.layout().addWidget(self.RealRabbitMesure_widget)
+
+
+
 
     def run_simulation_with_error_handling(self):
         try:
@@ -217,25 +259,74 @@ class ActionTimetableEditor(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.end_thread = True
         self.simulation_thread.join()
-        if self.env:
-            self.env.close()
-            self.env = None
+        if self.RlEnv:
+            self.RlEnv.close()
+            self.RlEnv = None
         QApplication.instance().quit()
         event.accept()
 
    
-    def initUI(self):        
+    def initUI(self):
+        #create a toolbar
+        self.toolbar = self.addToolBar("Toolbar")
+
+        # Pause/Unpause button
+        class QPauseButton(QPushButton):
+            def __init__(self, parent):
+                super().__init__(parent)
+                self.paused = False
+                self.setIcon(QIcon(r"public\start.png"))
+                self.clicked.connect(self.toggle_pause)
+            def toggle_pause(self):
+                self.paused = not self.paused
+                if self.paused:
+                    self.setIcon(QIcon(r"public\pause.png"))
+                else:
+                    self.setIcon(QIcon(r"public\start.png"))
+        self.pause_button = QPauseButton(self)
+        self.pause_button.clicked.connect(lambda: self.pause_unpause_simulation())
+        self.toolbar.addWidget(self.pause_button)
+
+        # Restart button
+        self.restart_button = QPushButton("Restart Simulation", self)
+        self.restart_button.clicked.connect(self.reset_simulation)
+        self.toolbar.addWidget(self.restart_button)
+
+        #add a speed slider
+        self.speed_slider = QSlider(Qt.Horizontal)
+        self.speed_slider.setMinimum(0)
+        self.speed_slider.setMaximum(10)
+        self.speed_slider.setValue(0)
+        self.toolbar.addWidget(self.speed_slider)
+
+
+        #dopdown box for what gets controled
+        self.isControled_dropdown = QComboBox(self)
+        self.isControled_dropdown.addItems(["Only Simulation", "Simulation_Imitation", "Only Real Robot"])
+        self.isControled_dropdown.setCurrentIndex(0)
+        self.isControled_dropdown.currentIndexChanged.connect(self.update_status)
+        self.isControled_dropdown.currentIndexChanged.connect(self.changeWhatIsControlled)
+        self.toolbar.addWidget(self.isControled_dropdown)
+
+        #add toolbar to the main window
+        self.addToolBar(self.toolbar)
+
+
         #Create a tabwidget with two tabs (Control and Observation)
         tab_widget = QTabWidget()
         self.setCentralWidget(tab_widget)
 
         # Control Tab
-        control_tab = QWidget()
-        tab_widget.addTab(control_tab, "Control")
+        self.control_tab = QWidget()
+        tab_widget.addTab(self.control_tab, "Control")
 
-        # Observation Tab
-        observation_tab = QWidget()
-        tab_widget.addTab(observation_tab, "Observation")
+        # Simulation Observation Tab
+        self.SimObservation_tab = QWidget()
+        tab_widget.addTab(self.SimObservation_tab, "Observation")
+
+        # Real Observation Tab
+        self.RealObservation_tab = QWidget()
+        tab_widget.addTab(self.RealObservation_tab, "Real Observation")
 
 
         control_layout = QVBoxLayout()
@@ -277,10 +368,6 @@ class ActionTimetableEditor(QMainWindow):
 
         # Real robot Box
         real_robot_layout = QVBoxLayout()
-        # Real robot checkbox
-        self.button_real_robot = QCheckBox("Real Robot", self)
-        self.button_real_robot.clicked.connect(self.toggle_real_robot)
-        real_robot_layout.addWidget(self.button_real_robot)
         # checkbox for savety mode or direct mode
         self.button_real_robot_savety = QCheckBox("Savety Mode", self)
         self.button_real_robot_savety.toggled.connect(self.update_status)
@@ -324,23 +411,6 @@ class ActionTimetableEditor(QMainWindow):
         self.camera_focus_button.clicked.connect(self.camera_focus_change)
         button_layout.addWidget(self.camera_focus_button)
 
-        # Pause/Unpause button
-        self.pause_button = QPushButton("Pause/Unpause Simulation", self)
-        self.pause_button.clicked.connect(lambda: self.pause_unpause_simulation())
-        button_layout.addWidget(self.pause_button)
-
-        # Restart button
-        self.restart_button = QPushButton("Restart Simulation", self)
-        self.restart_button.clicked.connect(self.reset_simulation)
-        button_layout.addWidget(self.restart_button)
-
-        #add a speed slider
-        self.speed_slider = QSlider(Qt.Horizontal)
-        self.speed_slider.setMinimum(0)
-        self.speed_slider.setMaximum(10)
-        self.speed_slider.setValue(0)
-        button_layout.addWidget(self.speed_slider)
-
         layout1.addLayout(button_layout, stretch=1)
         control_layout.addLayout(layout1, stretch=1)
         
@@ -350,14 +420,20 @@ class ActionTimetableEditor(QMainWindow):
         self.status_bar.showMessage("Ready")
 
         # Set the control_layout as the main layout of the Control tab
-        control_tab.setLayout(control_layout)
+        self.control_tab.setLayout(control_layout)
 
 
         # Observation Tab
         #add to the observation tab
         observation_layout = QVBoxLayout()
         observation_layout.addWidget(self.RabbitMesure_widget)
-        observation_tab.setLayout(observation_layout)
+        self.SimObservation_tab.setLayout(observation_layout)
+
+        # Real Observation Tab
+        #add to the observation tab
+        real_observation_layout = QVBoxLayout()
+        real_observation_layout.addWidget(self.RealRabbitMesure_widget)
+        self.RealObservation_tab.setLayout(real_observation_layout)
         
 
     def update_status(self):
@@ -368,17 +444,16 @@ class ActionTimetableEditor(QMainWindow):
             f"Auto Reset: {'Enabled' if self.auto_reset_checkbox.isChecked() else 'Disabled'}, "
             f"Savety Mode: {'On' if self.button_real_robot_savety.isChecked() else 'Off'}, "
             f"Speed Slider: {self.speed_slider.value()}"
+            f"What is controled: {self.isControled_dropdown.currentText()}"
+            f"Control Mode: {self.controlMode_active.currentText()}"
         )
         self.status_bar.showMessage(status_message)
 
     def hung_change(self):
-        self.env.simulation.hung = not self.env.simulation.hung
+        self.RlEnv.simulation.hung = not self.RlEnv.simulation.hung
 
     def camera_focus_change(self):
-        self.env.simulation.toogle_focus()
-
-    def savety_mode_change(self, checked):
-        self.env.robot_precise_mode = checked
+        self.RlEnv.simulation.toogle_focus()
 
 
     def on_table_cell_changed(self):
@@ -387,7 +462,16 @@ class ActionTimetableEditor(QMainWindow):
         self.manual_exp.action_timetable = self.table.get_dict()
 
     def reset_simulation(self):        
-        self.env.reset()
+        if self.RlEnv and self.isControled_dropdown.currentText() == "Only Simulation":
+            obs, inf = self.RlEnv.reset()
+        elif self.RlRobot and self.isControled_dropdown.currentText() == "Only Real Robot":
+            obs, inf = self.RlRobot.reset()
+        elif self.RlEnv and self.RlRobot:
+            obs, inf = self.RlEnv.reset()
+            _, _ = self.RlRobot.reset()
+        else:
+            print("No Environment or Robot to reset!")
+        return obs, inf
 
         #QMessageBox.information(self, "Restart", "Simulation restarted!")
 
@@ -401,36 +485,63 @@ class ActionTimetableEditor(QMainWindow):
         pass
 
     def changeControlMode(self):
-        if self.controlMode_active.currentText() == "Body Control":
-            self.control_input = ControlInput(self)
-            self.env_param_kwargs = self.def_env_param_kwargs
-            print("Make shure that the env_parameters do not contain the 'multi_task_goal' in the rewards_type list!")
-        elif self.controlMode_active.currentText() == "Auto":
+        if self.controlMode_active.currentText() == "Auto":
             self.control_input = None
-            self.env_param_kwargs["control_goalPos"] = None
-            self.env_param_kwargs["rewards_type"] = ["stability"]
+            self.RlEnv_param_kwargs["control_goalPos"] = None
+            self.RlEnv_param_kwargs["rewards_type"] = ["stability"]
             print("Make shure that the env_parameters do not contain the 'multi_task_goal' in the rewards_type list!")
-        else:
-            self.control_input = ControlInput(self)
-            self.env_param_kwargs["control_goalPos"] = self.control_input.get_left_JoystickVector
-            self.env_param_kwargs["rewards_type"] = ["multi_task_goal"]
-            print("Make shure that the env_parameters do contain the 'multi_task_goal' in the rewards_type list!")
+        # elif self.controlMode_active.currentText() == "Body Control":
+        #     self.control_input = ControlInput(self)
+        #     self.env_param_kwargs = self.def_env_param_kwargs
+        #     print("Make shure that the env_parameters do not contain the 'multi_task_goal' in the rewards_type list!")
+        # else:
+        #     self.control_input = ControlInput(self)
+        #     self.env_param_kwargs["control_goalPos"] = self.control_input.get_left_JoystickVector
+        #     self.env_param_kwargs["rewards_type"] = ["multi_task_goal"]
+        #     print("Make shure that the env_parameters do contain the 'multi_task_goal' in the rewards_type list!")
 
-        self.open_Env(self.env_param_kwargs)
+        self.open_RlEnv(self.RlEnv_param_kwargs)
 
-    def open_Env(self, env_param_kwargs):
-        self.env_param_kwargs = env_param_kwargs
+    def changeWhatIsControlled(self):
+        self.end_thread = True
+        time.sleep(1)
+        if self.isControled_dropdown.currentText() == "Only Simulation":
+            self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
+            self.control_input = None
+            self.controlMode_active.setCurrentIndex(2)#to auto
+            self.open_RlEnv(self.RlEnv_param_kwargs)
+            self.RlRobot = None
+            self.RealRabbitMesure_widget = None
+            print("Make shure that the env_parameters do not contain the 'multi_task_goal' in the rewards_type list!")
+        elif self.isControled_dropdown.currentText() == "Simulation_Imitation":
+            self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
+            #self.RLRobot_param_kwargs = self.def_RlEnv_param_kwargs
+            self.open_RlEnv(self.RlEnv_param_kwargs)
+            self.open_RlRobot(self.RLRobot_param_kwargs)
+        elif self.isControled_dropdown.currentText() == "Only Real Robot":
+            self.RlEnv_param_kwargs = None
+            #self.RLRobot_param_kwargs = self.def_RlEnv_param_kwargs
+            if self.RlEnv:
+                self.RlEnv.close()
+            self.RlEnv = None
+            self.open_RlRobot(self.RLRobot_param_kwargs)
+        
+        self.end_thread = False
+
+
+
+    def open_RlEnv(self, env_param_kwargs):
+        self.RlEnv_param_kwargs = env_param_kwargs
         #close the current environment and the thread
         self.end_thread = True
-        self.simulation_thread.join()
-        if self.env:
-            self.env.close()
-            self.env = None
+        # self.simulation_thread.join()
+        if self.RlEnv:
+            self.RlEnv.close()
+            self.RlEnv = None
 
         #open a new environment
-        self.env = RL_Env(**self.env_startup_parms, **self.env_param_kwargs)
-        self.env.simulation.hung = False
-        self.env.robot_precise_mode = self.button_real_robot_savety.isChecked()
+        self._init_RlEnv()
+        self.RlEnv.simulation.hung = False
         self.env_pause = True
 
         #if everything is ok, close the editor window
@@ -441,9 +552,34 @@ class ActionTimetableEditor(QMainWindow):
 
 
         #open a new thread
-        self.simulation_thread = None
-        self.simulation_thread = threading.Thread(target=self.run_simulation)
-        self.simulation_thread.start()
+        # self.simulation_thread = None
+        # self.simulation_thread = threading.Thread(target=self.run_simulation)
+        # self.simulation_thread.start()
+        print("Simulation started!")
+
+    def open_RlRobot(self, RLRobot_param_kwargs):
+        self.RLRobot_param_kwargs = RLRobot_param_kwargs
+        #close the current environment and the thread
+        self.end_thread = True
+        if self.RlRobot:
+            self.RlRobot.close()
+            self.RlRobot = None
+
+        #open a new environment
+        self._init_RlRobot()
+        self.env_pause = True
+
+        #if everything is ok, close the editor window
+        if self.env_param_editor:
+            self.env_param_editor.close()
+            self.env_param_editor = None
+            print("env_param_editor closed!")
+
+
+        #open a new thread
+        # self.simulation_thread = None
+        # self.simulation_thread = threading.Thread(target=self.run_simulation)
+        # self.simulation_thread.start()
         print("Simulation started!")
 
 
@@ -452,15 +588,10 @@ class ActionTimetableEditor(QMainWindow):
     
     def open_Env_param(self):
         #open the environment parameter editor
-        self.env_param_editor = EnvParameterEditor(self.env_param_kwargs, self.open_Env)
+        self.env_param_editor = EnvParameterEditor(self.RlEnv_param_kwargs, self.open_RlEnv)
         self.env_param_editor.setWindowTitle("Environment Parameter Editor")
         self.env_param_editor.resize(600, 400)
         self.env_param_editor.show()
-
-    def toggle_real_robot(self, checked):
-        # Restart the simulation by wether leading or without loading the robot_env
-        self.env_startup_parms["real_robot"] = checked
-        self.open_Env(self.env_param_kwargs)
 
 
     def open_model_file(self):
@@ -491,55 +622,66 @@ class ActionTimetableEditor(QMainWindow):
         # As long as the environments fit the model, everything is fine.
         self.no_error = True
         self.end_thread = False
+        while True:
+            while not self.end_thread and self.no_error: # Run the simulation loop
+                obs, inf = self.reset_simulation()
+                done = False
 
-        while not self.end_thread and self.no_error:
-            obs, info = self.env.reset()
-            done = False
-
-            while not done and not self.end_thread and self.no_error:
-                if not self.env_pause:
-                    if self.controlMode_active.currentText() == "Body Control" and self.control_input is not None: # Body Control (Joystick) is controlling the robot
-                        action = self.control_input.get_BodyPose()
-                        print(action)
-                    elif self.loaded_model is not None and self.button_mod_active.isChecked():# A RL-Agent is controlling the robot
-                        try:
-                            action, pred_info = self.loaded_model.predict(obs)
-                        except Exception as e:
-                            self.no_error = False
-                            print(f"Error in model prediction: {e}")
-                    else: #self.controlMode_active.currentText() == "Auto": # Manual Expert is controlling the robot
-                        try:
-                            action, state = self.manual_exp.think_and_respond(obs, None, done, self.env.simulation.rabbit.lifetime)
+                while not done and not self.end_thread and self.no_error:
+                    if not self.env_pause:
+                        if self.controlMode_active.currentText() == "Body Control" and self.control_input is not None: # Body Control (Joystick) is controlling the robot
+                            action = self.control_input.get_BodyPose()
                             print(action)
-                            # Highlight the active row
-                            action_key_index = list(self.manual_exp.action_timetable.keys()).index(self.manual_exp.action_key)
-                            self.table.highlight_active_row(action_key_index)
+                        elif self.loaded_model is not None and self.button_mod_active.isChecked():# A RL-Agent is controlling the robot
+                            try:
+                                action, pred_info = self.loaded_model.predict(obs)
+                            except Exception as e:
+                                self.no_error = False
+                                print(f"Error in model prediction: {e}")
+                        else: #self.controlMode_active.currentText() == "Auto": # Manual Expert is controlling the robot
+                            try:
+                                life_time = self.RlEnv.simulation.rabbit.lifetime if self.isControled_dropdown.currentText() in ["Only Simulation", "Simulation_Imitation"] else self.RlRobot.rabbit.lifetime
+                                action, state = self.manual_exp.think_and_respond(obs, None, done, life_time)
+                                print(action)
+                                # Highlight the active row
+                                action_key_index = list(self.manual_exp.action_timetable.keys()).index(self.manual_exp.action_key)
+                                self.table.highlight_active_row(action_key_index)
+                            except Exception as e:
+                                self.no_error = False
+                                print(f"Error in manual response: {e}")
+                                traceback.print_exc()
+                        #print(action)
+                        try:
+                            if self.isControled_dropdown.currentText() == "Only Simulation":
+                                obs, reward, terminated, truncated, info = self.RlEnv.step(action)
+                            elif self.isControled_dropdown.currentText() == "Simulation_Imitation":
+                                _, _, _, _, _ = self.RlRobot.step(action)
+                                obs, reward, terminated, truncated, info = self.RlEnv.step(action)
+
+                            elif self.isControled_dropdown.currentText() == "Only Real Robot":
+                                obs, reward, terminated, truncated, info = self.RlRobot.step(action)
+                            done = (terminated or truncated) and self.auto_reset_checkbox.isChecked()
                         except Exception as e:
                             self.no_error = False
-                            print(f"Error in manual response: {e}")
-                            traceback.print_exc()
+                            print(f"Error in environment step: {e}")
+                        
 
-                    #print(action)
-                    try:
-                        obs, reward, terminated, truncated, info = self.env.step(action)
-                        print(obs)
-                        done = (terminated or truncated) and self.auto_reset_checkbox.isChecked()
-                    except Exception as e:
-                        self.no_error = False
-                        print(f"Error in environment step: {e}")
-                    
+                        time.sleep(self.speed_slider.value() / 10)
+                    else:
+                        time.sleep(0.5)
 
-                    time.sleep(self.speed_slider.value() / 10)
-                else:
-                    time.sleep(0.5)
-
-        if not self.no_error:
-            # Dialog if there is an error
-            print("Error", "An error occurred! Simulation stopped! Probably the Environment does not fit the model!")
-            # If there is an error, close the environment
-
-            self.env.close()
-            self.env = None
+            if not self.no_error:
+                # Dialog if there is an error
+                print("Error", "An error occurred! Simulation stopped! Probably the Environment does not fit the model!")
+                # If there is an error, close the environment
+                if self.RlEnv:
+                    self.RlEnv.close()
+                    self.RlEnv = None
+                if self.RlRobot:
+                    self.RlRobot.close()
+                    self.RlRobot = None
+                self.end_thread = True
+            time.sleep(0.5)
             
     def copy_to_clipboard(self):
         timetable_str = str(self.manual_exp.action_timetable)

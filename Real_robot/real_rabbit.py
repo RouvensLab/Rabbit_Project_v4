@@ -42,7 +42,8 @@ class Rabbit_real:
 
 
         self.Motors_range = [(-0.610865, 0.785398), (-0.523599, 0.523599), (-0.785398, 0.261799), (-0.523599, 0.523599), (-2.268928, 0.174533), (-1.047198, 0.785398), (-0.785398, 0.785398), (-2.268928, 0.174533), (-0.785398, 1.047198), (-0.785398, 0.785398), (-1.570796, 1.047198), (-1.570796, 1.047198)]
-        
+        self.Motors_range = self.convert_12_to_8_motors(self.Motors_range)
+        print("Motors_range", self.Motors_range)
         #set the self collision of the robot
         #self.set_self_collision()
         self.lifetime = 0
@@ -73,12 +74,12 @@ class Rabbit_real:
                     motors_12_value[4], 
                     motors_12_value[5],
 
-                    motors_12_value[6],
                     motors_12_value[7],
+                    motors_12_value[8],
 
 
-                    motors_12_value[8], 
-                    motors_12_value[9]
+                    motors_12_value[10], 
+                    motors_12_value[11]
                     
                     ]
         #if the values are tuples convert them to np.arrays and calculate the mean
@@ -86,16 +87,15 @@ class Rabbit_real:
             return [(np.array(motors_12_value[0]) - np.array(motors_12_value[3])) / 2, 
                     (np.array(motors_12_value[1]) - np.array(motors_12_value[2])) / 2,
 
-
                     motors_12_value[4], 
                     motors_12_value[5],
 
-                    motors_12_value[6],
                     motors_12_value[7],
+                    motors_12_value[8],
 
 
-                    motors_12_value[8], 
-                    motors_12_value[9]
+                    motors_12_value[10], 
+                    motors_12_value[11]
                     ]
 
 
@@ -247,6 +247,7 @@ class Rabbit_real:
         pose_positions: list with the goal positions of the servos, with the used range (-1, 1). e.g. [0,0,   0,0,   0,0,   0,0]
         """
         #map the servo_positions to the range of the servos
+
         servo_positions = [self._map(pos, range[0], range[1], self.Motors_range[i][0], self.Motors_range[i][1]) for i, pos in enumerate(pose_positions)]
 
         #add the knee joint angles ==> hip joint angles
@@ -254,8 +255,8 @@ class Rabbit_real:
         servo_positions[5] = self.get_Motor2_inverse_kinematics(servo_positions[4], servo_positions[5])
 
         #transform the spine joint angles
-        servo_positions[0] = np.clip(servo_positions[1]*-45+servo_positions[0]*-45, -45, 45)/180*math.pi
-        servo_positions[1] = np.clip(servo_positions[1]*45+servo_positions[0]*-45, -45, 45)/180*math.pi
+        servo_positions[0] = np.clip(pose_positions[1]*45+pose_positions[0]*-45, -45, 45)/180*math.pi
+        servo_positions[1] = np.clip(pose_positions[1]*45+pose_positions[0]*-45, -45, 45)/180*math.pi
 
         self.send_motor_commands(servo_positions)
 
@@ -265,10 +266,10 @@ class Rabbit_real:
         """Send motor commands to the robot in radians
         motor_commands: list with the motor commands in the order of the motors
         """
-        #convert radians to 2000 to -2000
-        motor_commands = np.array(motor_commands)*2047/np.pi
+        #convert radians to 0 -4094
+        motor_commands = [int(self._map(motor, -math.pi, math.pi, 0, 4094)) for i, motor in enumerate(motor_commands)]
         print("motor_commands", motor_commands)
-        self.servoControler.action_queue.put({"positions": motor_commands, "speeds": [1000]*8})     
+        self.servoControler.action_queue.put({"positions": motor_commands, "speeds": [4094]*8})
 
 
     
@@ -389,6 +390,12 @@ class Rabbit_real:
 
 
         return b1
+    
+    def close(self):
+        """Close the connection to the robot
+        """
+        self.servoControler.stop_run()
+        self.servoControler.close()
 
 
 if __name__=="__main__":
@@ -398,8 +405,10 @@ if __name__=="__main__":
     while True:
         real_rabbit.step(0.01)
         real_rabbit.send_goal_pose([0, 0,    0, 0,  0, 0,    0, 0])
-        get_func = real_rabbit.create_get_informations(["head_orientation", "head_angular_velocity", "head_acceleration", "joint_angles", "joint_torques", "joint_velocities", "joint_action_rate", "joint_action_acceleration"])
+        get_func = real_rabbit.create_get_informations(["head_orientation", "head_angular_velocity", "head_linear_acceleration", "joint_angles", "joint_torques", "joint_velocities"])
         print(get_func())
-        time.sleep(0.01)
+        time.sleep(1)
+        real_rabbit.send_goal_pose([0.3, 0.3,    0.3, 0.3,  0.3, 0.3,    0.3, 0.3])
+        time.sleep(1)
 
     

@@ -59,7 +59,7 @@ class Rabbit:
         # Create a deque to hold (actions, time) tuples; maxlen=3 lets us compute acceleration.
         self.action_history = deque(maxlen=3)
 
-        self.linkWorldOrientation, self.worldLinkLinearAcceleration, self.worldLinkAngularVelocity = [0, 0, 0], [0, 0, 0], [0, 0, 0]
+        self.linkWorldOrientation, self.worldLinkLinearAcceleration, self.worldLinkAngularVelocity, self.worldLinkLinearVelocity = [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]
 
         #reset the robot to the initial position, so that the constraints can be set
         self.reset()
@@ -150,12 +150,12 @@ class Rabbit:
                     motors_12_value[4], 
                     motors_12_value[5],
 
-                    motors_12_value[6],
                     motors_12_value[7],
+                    motors_12_value[8],
 
 
-                    motors_12_value[8], 
-                    motors_12_value[9]
+                    motors_12_value[10], 
+                    motors_12_value[11]
                     
                     ]
         #if the values are tuples convert them to np.arrays and calculate the mean
@@ -163,16 +163,15 @@ class Rabbit:
             return [(np.array(motors_12_value[0]) - np.array(motors_12_value[3])) / 2, 
                     (np.array(motors_12_value[1]) - np.array(motors_12_value[2])) / 2,
 
-
                     motors_12_value[4], 
                     motors_12_value[5],
 
-                    motors_12_value[6],
                     motors_12_value[7],
+                    motors_12_value[8],
 
 
-                    motors_12_value[8], 
-                    motors_12_value[9]
+                    motors_12_value[10], 
+                    motors_12_value[11]
                     ]
 
 
@@ -255,7 +254,7 @@ class Rabbit:
                 lambda_list.append(lambda:  self.convert_12_to_8_motors([p.getJointState(self._id, i)[1] for i in self.Joints_index]))
             elif "joint_action_rate"== state_type:
                 lambda_list.append(lambda: self.get_action_rate())
-            elif "joint_action_acceleration"== state_type:
+            elif "joint_acceleration"== state_type:
                 lambda_list.append(lambda: self.get_action_acceleration())
             
             elif "component_coordinates_world"== state_type:

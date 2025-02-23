@@ -9,9 +9,10 @@ from Real_robot.real_rabbit import Rabbit_real
 
 
 
-class RL_Env(Env):
+class RL_Robot(Env):
     def __init__(self,
                 ModelType="SAC",
+                RobotType="Rabbit_real",
                 gui = True,
                 render_mode = "human",
                 observation_type_stacked=["head_orientation", "head_linear_acceleration", "head_angular_velocity", "joint_torques"],
@@ -19,11 +20,10 @@ class RL_Env(Env):
                 simulation_Timestep = 0.1,
                 obs_time_space = 1, #in seconds
                 n_stack = 5,
-                real_robot = False,
 
                 
                 ):
-        super(RL_Env, self).__init__()
+        super(RL_Robot, self).__init__()
         self.ModelType = ModelType
         self.observation_type_stacked = observation_type_stacked
         self.observation_type_solo = observation_type_solo
@@ -34,14 +34,20 @@ class RL_Env(Env):
         self.render_mode = render_mode
         self.n_steps = 0
 
-        #self.rabbit = Rabbit_real()
-        from mesure_rabbt import get_measuredRabbit 
-        self.rabbit = get_measuredRabbit(Rabbit_real,
-                                        state_types_body=["head_orientation", "head_linear_acceleration", "head_angular_velocity"], 
-                                        state_types_servos=["joint_torques", "joint_velocities", "joint_angles"], 
-                                        trajectory_data_structure= ["joint_torques"]
-                                            )()
-        self.rabbit.create_seperate_Window()
+        if RobotType == "Rabbit_real":
+            from Real_robot.real_rabbit import Rabbit_real
+            self.rabbit = Rabbit_real()
+        elif RobotType == "Rabbit_mesured":
+            from Real_robot.real_rabbit import Rabbit_real
+            from mesure_rabbt import get_measuredRabbit 
+            self.rabbit = get_measuredRabbit(Rabbit_real,
+                                            state_types_body=["head_orientation", "head_linear_acceleration", "head_angular_velocity"], 
+                                            state_types_servos=["joint_torques", "joint_velocities", "joint_angles"], 
+                                            trajectory_data_structure= ["joint_torques"]
+                                                )()
+            #self.rabbit.create_seperate_Window()
+        else:
+            raise ValueError("Unknown Robot type")
         
         self.action_low_high = [-1, 1]
         self.observation_low_high = [-1, 1]
@@ -233,7 +239,7 @@ class RL_Env(Env):
             self.last_time = time.time()
 
     def close(self):
-        pass
+        self.rabbit.close()
 
     def seed(self, seed=None):
         pass
@@ -271,7 +277,7 @@ class PhaseGenerator:
 
     
 if __name__ == "__main__":
-    env = RL_Env()
+    env = RL_Robot(RobotType="Rabbit_mesured")
     env.reset()
     for _ in range(1000):
         action = env.action_space.sample()

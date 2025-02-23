@@ -12,6 +12,8 @@ class ServoSupervisor(threading.Thread):
         threading.Thread.__init__(self)
         self.showUpdates = False
         self.showErrors = True
+        self.no_close = True
+        self.pause = False
         self.servoIDs = servo_id_order
         self.upToDate_dataTypes = []
         self.GroupSyncReads = {}
@@ -31,7 +33,13 @@ class ServoSupervisor(threading.Thread):
         self.pause = True
     def continiu_run(self):
         self.pause = False
-
+    
+    def close(self):
+        #joint the thread
+        self.no_close = False
+        self.join()
+        #close the port
+        self.portHandler.closePort()
 
     def _init_servocontroler(self):
         # some global defined variables. Not changable-------------------
@@ -277,6 +285,10 @@ class ServoSupervisor(threading.Thread):
             
 
     def send_command(self, new_positions, new_speeds):
+        """
+        The new position must be between 0 and 4094
+        The new speed must be between 0 and 4094
+        """
         #Checks if the new_positions and new_speeds are of the same length as the number of servos
         if len(new_positions) != len(self.servoIDs) or len(new_speeds) != len(self.servoIDs):
             print("Error: The number of positions and speeds should be equal to the number of servos")
@@ -316,7 +328,7 @@ class ServoSupervisor(threading.Thread):
     def run(self):
         print("Starting thread ????")
         start_time = time.time()
-        while True:
+        while self.no_close:
             while self.pause == False:
                 
                 if not self.action_queue.empty():
@@ -351,6 +363,6 @@ if __name__ == "__main__":
 
     for i in range(10):
         time.sleep(1)
-        supervisor.action_queue.put({"positions": [2000]*8, "speeds": [1000]*8})
+        supervisor.action_queue.put({"positions": [0]*8, "speeds": [0]*8})
         time.sleep(1)
-        supervisor.action_queue.put({"positions": [3000]*8, "speeds": [1000]*8})
+        supervisor.action_queue.put({"positions": [-500]*8, "speeds": [-500]*8})

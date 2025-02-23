@@ -123,6 +123,9 @@ class Simulation:
                 time.sleep(self.simulation_Timestep-(time.time()-self.last_time))
             self.last_time = time.time()
 
+    def close(self):
+        p.disconnect()
+
 if __name__ == "__main__":
     env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
     env.rabbit.create_seperate_Window()
