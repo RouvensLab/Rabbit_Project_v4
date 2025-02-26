@@ -426,7 +426,10 @@ class PhaseGenerator:
 
     
 if __name__ == "__main__":
-    env = RL_Env()
+    env = RL_Env(
+        RobotType="Rabbit_v3_mesured",
+    )
+    env.simulation.rabbit.create_seperate_Window()
     env.reset()
     for _ in range(1000):
         action = env.action_space.sample()

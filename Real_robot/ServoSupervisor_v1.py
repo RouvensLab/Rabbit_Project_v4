@@ -13,11 +13,23 @@ class ServoSupervisor(threading.Thread):
         self.showUpdates = False
         self.showErrors = True
         self.no_close = True
-        self.pause = False
+        self.pause = True
         self.servoIDs = servo_id_order
         self.upToDate_dataTypes = []
         self.GroupSyncReads = {}
         self.Data_Stack = {}
+        self.parti_Update_state = 0
+
+        self.servos_info = {
+            1: {"min": 0, "max": 4094, "orientation": 0},
+            2: {"min": 0, "max": 4094, "orientation": 1},
+            3: {"min": 0, "max": 4094, "orientation": 0},
+            4: {"min": 0, "max": 4094, "orientation": 1},
+            5: {"min": 0, "max": 4094, "orientation": 0},
+            6: {"min": 0, "max": 4094, "orientation": 1},
+            7: {"min": 0, "max": 4094, "orientation": 1},
+            8: {"min": 0, "max": 4094, "orientation": 0},
+        }
 
         #For sending comands to the servos
         self.action_queue = queue.Queue()
@@ -46,7 +58,7 @@ class ServoSupervisor(threading.Thread):
         self.SERIAL_PORT = 'COM3'
         self.BAUDRATE = 921600                #115200
         self.SCS_MOVING_ACC = 255
-        self.SCS_MOVABLE_RANGE = (0, 4094)
+        self.SCS_MOVABLE_RANGE = (0, 4080)#(0, 4094)
         self.ADDR_STS_GOAL_POSITION = 42
         self.ADDR_STS_GOAL_ACC = 41
         self.ADDR_STS_GOAL_SPEED = 46
@@ -63,6 +75,8 @@ class ServoSupervisor(threading.Thread):
                                         "TorqueEnable": [6, 1, SMS_STS_TORQUE_ENABLE        , 1, 1],
                                         "MobileSign":   [7, 0, SMS_STS_MOVING               , 1, 1]
                                         }
+        
+
 
         # Initialize PortHandler and PacketHandler instances
         self.portHandler = PortHandler(self.SERIAL_PORT)
@@ -77,7 +91,7 @@ class ServoSupervisor(threading.Thread):
         time.sleep(self.initializing_pause)
 
         #scaning the servos
-        self.servoIDs = self.ScanServos()
+        self.servo_pres = self.ScanServos()
 
         #reading Data -----------------------------------------------------
 
@@ -115,7 +129,7 @@ class ServoSupervisor(threading.Thread):
     def create_get_inf(self, state_type):
         if "Position" == state_type:
             self.add_dataType(state_type)
-            lambda_func = lambda state_type=state_type: self._map_array(np.array(self.Data_Stack[state_type]), in_min=0, in_max=4094, out_min=-math.pi, out_max=math.pi)
+            lambda_func = lambda state_type=state_type: [self.calculate_int_to_rad(self.servoIDs[index], sts_pos) for index, sts_pos in enumerate(self.Data_Stack[state_type])]
         elif "Velocity" == state_type:
             self.add_dataType(state_type)
             lambda_func = lambda state_type=state_type: self.Data_Stack[state_type]
@@ -138,6 +152,9 @@ class ServoSupervisor(threading.Thread):
         elif "MobileSign"== state_type:
             self.add_dataType(state_type)
             lambda_func = lambda: np.array(self.Data_Stack[state_type])==1
+        elif "All"== state_type:
+            self.add_dataType(state_type)
+            lambda_func = lambda state_type=state_type: self.Data_Stack[state_type]
         return lambda_func
     
     def create_get_informations(self, data_types):
@@ -248,58 +265,98 @@ class ServoSupervisor(threading.Thread):
                     self.Data_Stack[dataType][index] = data
             groupSync_obj.clearParam()
 
+    def update_singel_state(self, dataType, scs_id):
+        if dataType == "Position":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadPos(scs_id)
+        elif dataType == "Velocity":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadSpeed(scs_id)
+        elif dataType == "Load":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadLoad(scs_id)
+        elif dataType == "Voltage":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadVoltage(scs_id)
+        elif dataType == "Current":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadCurrent(sts_id=scs_id)
+        elif data == "Temperature":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadTemperature(sts_id=scs_id)
+        elif dataType == "TorqueEnable":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadTorqueEnable(sts_id=scs_id)
+        elif dataType == "MobileSign":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadMoving(sts_id=scs_id)
+        elif dataType == "All":
+            data, sts_comm_result, sts_error = self.packetHandler.ReadAll(sts_id=scs_id)
+        else:
+            print(f"Error: Unknown data type {dataType}")
+        return data
+    
+
     def update_states(self):
         for dataType, groupSync_obj in self.GroupSyncReads.items():
-            
-            # scs_comm_result = groupSync_obj.txRxPacket()#send the packet and receive the data
-            # if scs_comm_result != COMM_SUCCESS:
-            #     print(f"Error reading {dataType} data") if self.showErrors else None
-
-            # data_address = self.servo_state_structure[dataType][2]
-            # data_length = self.servo_state_structure[dataType][3]
-            # #print(groupSync_obj.data_dict)
 
             for index, scs_id in enumerate(self.servoIDs):
-                if dataType == "Position":
-                    data, sts_comm_result, sts_error = self.packetHandler.ReadPos(scs_id)
-                    self.Data_Stack[dataType][index] = data
-                elif dataType == "Velocity":
-                    data, sts_comm_result, sts_error = self.packetHandler.ReadSpeed(scs_id)
-                    self.Data_Stack[dataType][index] = data
-                elif dataType == "Load":
-                    data, sts_comm_result, sts_error = self.packetHandler.ReadLoad(scs_id)
-                    self.Data_Stack[dataType][index] = data
-                elif dataType == "Voltage":
-                    data, sts_comm_result, sts_error = self.packetHandler.ReadVoltage(scs_id)
-                    self.Data_Stack[dataType][index] = data
-                elif dataType == "Current":
-                    data, sts_comm_result, sts_error = self.packetHandler.ReadCurrent(sts_id=scs_id)
-                elif data == "Temperature":
-                    data, sts_comm_result, sts_error = self.packetHandler.ReadTemperature(sts_id=scs_id)
-                elif dataType == "TorqueEnable":
-                    data, sts_comm_result, sts_error = self.packetHandler.ReadTorqueEnable(sts_id=scs_id)
-                elif dataType == "MobileSign":
-                    data, sts_comm_result, sts_error = self.packetHandler.ReadMoving(sts_id=scs_id)
-                    self.Data_Stack[dataType][index] = data
+                data = self.update_singel_state(dataType, scs_id)
                 self.Data_Stack[dataType][index] = data
+    
+    def partial_update_states(self, time_for_update = 0.1):
+        """This updates only a few data pices. Dependent on the time per update"""
+        #check for possible problems
+        if len(self.upToDate_dataTypes) == 0:
+            print("Error: No data types to be read")
+            return
+        if len(self.servoIDs) == 0:
+            print("Error: No servos to read from")
+            return
+        
+        used_time_for_one_update = 0.016
+        number_of_updates = int(time_for_update/used_time_for_one_update)
+        for i in range(number_of_updates):
+            data_type = self.upToDate_dataTypes[self.parti_Update_state%len(self.upToDate_dataTypes)]
+            scs_id = self.servoIDs[self.parti_Update_state%len(self.servoIDs)]
+            index = self.parti_Update_state%len(self.servoIDs)
+            data = self.update_singel_state(data_type, scs_id)
+            self.Data_Stack[data_type][index] = data
+            self.parti_Update_state += 1
+
+        if self.parti_Update_state >= len(self.servoIDs)*len(self.upToDate_dataTypes):
+            self.parti_Update_state = 0
             
+    def set_torque_state(self, scs_id, enable=True):
+        """Disable the torque of the servo"""
+        if enable:
+            scs_comm_result = self.packetHandler.Write_Torque(scs_id, 1)
+        else:
+            scs_comm_result = self.packetHandler.Write_Torque(scs_id, 0)
+        if scs_comm_result != COMM_SUCCESS:
+            print(f"Error: Could not set the torque of servo {scs_id} to {enable}, Result: {scs_comm_result}")
+        
+
+
+
+    def _map(self, x, in_min, in_max, out_min, out_max):
+        return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
     def send_command(self, new_positions, new_speeds):
         """
         The new position must be between 0 and 4094
         The new speed must be between 0 and 4094
+
+        return: True if the new command is different from the previous command
         """
         #Checks if the new_positions and new_speeds are of the same length as the number of servos
         if len(new_positions) != len(self.servoIDs) or len(new_speeds) != len(self.servoIDs):
             print("Error: The number of positions and speeds should be equal to the number of servos")
-            return
+            return 
         # #check if the commands are the same as the previous commands
         # if new_positions == self.current_actions["positions"] and new_speeds == self.current_actions["speeds"]:
-        #     return
+        #     return False
+        self.current_actions["positions"] = new_positions
+        self.current_actions["speeds"] = new_speeds
+        
 
+        #map the new_positions to the range of 0 to 4094
         for index, scs_id in enumerate(self.servoIDs):
-            position = int(new_positions[index])
-            speed = int(new_speeds[index])
+            position = self.calculate_rad_to_int(scs_id, new_positions[index])
+            speed = new_speeds[index]
+            print(f"ID: {scs_id}, Position: {position}, Speed: {speed}")
             scs_addparam_result = self.packetHandler.SyncWritePosEx(scs_id, position, speed, self.SCS_MOVING_ACC)
             if scs_addparam_result != True:
                 print("[ID:%03d] groupSyncWrite addparam failed" % scs_id) if self.showErrors else None
@@ -310,6 +367,25 @@ class ServoSupervisor(threading.Thread):
 
         # Clear syncwrite parameter storage
         self.packetHandler.groupSyncWrite.clearParam()
+        return True
+    
+    def calculate_rad_to_int(self, sts_id, new_position):
+        """
+        Calculate the servo positions from the new_position
+        """
+        if self.servos_info[sts_id]["orientation"] == 1:
+            return int(np.clip(self._map(new_position, math.pi, -math.pi, *self.SCS_MOVABLE_RANGE), self.servos_info[sts_id]["min"], self.servos_info[sts_id]["max"]))
+        else:
+            return int(np.clip(self._map(new_position, -math.pi, math.pi, *self.SCS_MOVABLE_RANGE), self.servos_info[sts_id]["min"], self.servos_info[sts_id]["max"]))
+    
+    def calculate_int_to_rad(self, sts_id, new_position):
+        """
+        Calculate the radiant position from the servo position which is between 0 and 4094
+        """
+        if self.servos_info[sts_id]["orientation"] == 1:
+            return self._map(new_position, *self.SCS_MOVABLE_RANGE, math.pi, -math.pi)
+        else:
+            return self._map(new_position, *self.SCS_MOVABLE_RANGE, -math.pi, math.pi)
 
     def print_beautifullTable(self):
         """
@@ -325,9 +401,9 @@ class ServoSupervisor(threading.Thread):
 
         print(table)
 
-    def run(self):
+    def run(self, send_pace=0.8):
         print("Starting thread ????")
-        start_time = time.time()
+        
         while self.no_close:
             while self.pause == False:
                 
@@ -336,13 +412,15 @@ class ServoSupervisor(threading.Thread):
                     action = self.action_queue.get()
                     if action is not None:
                         # Execute the action
-                        self.send_command(action["positions"], action["speeds"])
+                        start_time = time.time()
+                        not self.send_command(action["positions"], action["speeds"])
+                        print(f"Time: {time.time()-start_time}")
                         print("Action executed")
                         self.action_queue.task_done()
-                    #time.sleep(0.005)
                 else:
                     # If no actions are available, update the states
                     self.update_states()
+                   # self.partial_update_states(send_pace)
                 
                 #show the current states
                 if self.showUpdates:
@@ -353,16 +431,28 @@ class ServoSupervisor(threading.Thread):
                     self.print_beautifullTable()
             time.sleep(0.1)
 
+    def close(self):
+        self.no_close = False
+        self.join()
+        self.portHandler.closePort()
+
 
 
 if __name__ == "__main__":
     # Usage example
     supervisor = ServoSupervisor()
+    getFunction = supervisor.create_get_informations(["All"])
+
+    supervisor.set_torque_state(4, True)
+    supervisor.set_torque_state(6, False)
     supervisor.start_run()
-    getFunction = supervisor.create_get_informations(["Current"])
+    
 
     for i in range(10):
+        # time.sleep(1)
+        # supervisor.action_queue.put({"positions": [0]*8, "speeds": [4000]*8})
         time.sleep(1)
-        supervisor.action_queue.put({"positions": [0]*8, "speeds": [0]*8})
-        time.sleep(1)
-        supervisor.action_queue.put({"positions": [-500]*8, "speeds": [-500]*8})
+        action_input = [math.pi/4]*8
+        #supervisor.action_queue.put({"positions": action_input, "speeds": [4000]*8})
+        print(action_input)
+        print(getFunction()[1])

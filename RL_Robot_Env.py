@@ -42,7 +42,7 @@ class RL_Robot(Env):
             from mesure_rabbt import get_measuredRabbit 
             self.rabbit = get_measuredRabbit(Rabbit_real,
                                             state_types_body=["head_orientation", "head_linear_acceleration", "head_angular_velocity"], 
-                                            state_types_servos=["joint_torques", "joint_velocities", "joint_angles"], 
+                                            state_types_servos=["joint_angles"], 
                                             trajectory_data_structure= ["joint_torques"]
                                                 )()
             #self.rabbit.create_seperate_Window()

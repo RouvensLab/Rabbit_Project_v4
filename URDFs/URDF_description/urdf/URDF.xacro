@@ -592,6 +592,7 @@
   <parent link="Top_v1_1"/>
   <child link="Front_leg_left_v4_Spiegeln__1"/>
   <axis xyz="-1.0 0.0 -0.0"/>
+  <!-- <axis xyz="1.0 0.0 -0.0"/> -->
   <limit upper="1.047198" lower="-1.570796" effort="100" velocity="100"/>
 </joint>
 
@@ -600,6 +601,7 @@
   <parent link="Bunny_Bottom_v2_v7_1"/>
   <child link="Upper_Leg_v5_1"/>
   <axis xyz="1.0 0.0 0.0"/>
+  <!-- <axis xyz="-1.0 0.0 0.0"/> -->
   <limit upper="0.174533" lower="-2.268928" effort="100" velocity="100"/>
 </joint>
 
@@ -624,7 +626,9 @@
   <parent link="Upper_Leg_v5_1"/>
   <child link="Lower_Leg_v2_1"/>
   <axis xyz="-1.0 -0.0 -0.0"/>
-  <limit upper="1.047198" lower="-0.785398" effort="100" velocity="100"/>
+  <!-- <axis xyz="1.0 -0.0 -0.0"/> -->
+  <!-- <limit upper="1.047198" lower="-0.785398" effort="100" velocity="100"/> -->
+  <limit upper="0.785398" lower="-1.047198" effort="100" velocity="100"/>
 </joint>
 
 <joint name="Umdrehung 14" type="revolute">
@@ -632,6 +636,7 @@
   <parent link="Lower_Leg_v2_1"/>
   <child link="Foot_v4__1__1"/>
   <axis xyz="-1.0 -0.0 -0.0"/>
+  <!-- <axis xyz="1.0 -0.0 -0.0"/> -->
   <limit upper="0.785398" lower="-0.785398" effort="100" velocity="100"/>
 </joint>
 

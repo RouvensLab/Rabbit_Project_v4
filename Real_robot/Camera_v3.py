@@ -151,6 +151,10 @@ class Camera:
                 pass
                 #print(f"No frame received: frame={frame}")
 
+    def close(self):
+        """Closes the WebSocket connection."""
+        self.ws.close()
+
 
 if __name__ == "__main__":
     # Usage example

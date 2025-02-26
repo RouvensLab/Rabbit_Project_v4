@@ -20,6 +20,7 @@ class Rabbit_real:
         """Initialize the rabbit"""
         #get the names of the joints
         self.Joints_index = [1, 2,   3, 5,   4, 6,   7, 8]
+        self.Joint_correction = [0, -0.1,   0, 0,   0.1, 0.3,   0, -0.15]
         self.numMotors = 8
 
         self.servoControler = ServoSupervisor(servo_id_order=self.Joints_index)
@@ -41,8 +42,9 @@ class Rabbit_real:
 
 
 
-        self.Motors_range = [(-0.610865, 0.785398), (-0.523599, 0.523599), (-0.785398, 0.261799), (-0.523599, 0.523599), (-2.268928, 0.174533), (-1.047198, 0.785398), (-0.785398, 0.785398), (-2.268928, 0.174533), (-0.785398, 1.047198), (-0.785398, 0.785398), (-1.570796, 1.047198), (-1.570796, 1.047198)]
+        self.Motors_range = [(-0.610865, 0.785398), (-0.523599, 0.523599), (-0.785398, 0.261799), (-0.523599, 0.523599), (-2.268928, 0.174533), (-1.047198, 0.785398), (-0.785398, 0.785398), (-2.268928, 0.174533), (-1.047198, 0.785398), (-0.785398, 0.785398), (-1.570796, 1.047198), (-1.570796, 1.047198)]
         self.Motors_range = self.convert_12_to_8_motors(self.Motors_range)
+        self.Savety_range = [(-1, 1), (-1, 1),   (-1, 1), (-1, 1),    (-1, 1), (-1, 1),    (-1, 1), (-1, 1)]
         print("Motors_range", self.Motors_range)
         #set the self collision of the robot
         #self.set_self_collision()
@@ -247,16 +249,17 @@ class Rabbit_real:
         pose_positions: list with the goal positions of the servos, with the used range (-1, 1). e.g. [0,0,   0,0,   0,0,   0,0]
         """
         #map the servo_positions to the range of the servos
+        pose_positions = np.array(pose_positions)+np.array(self.Joint_correction)
 
         servo_positions = [self._map(pos, range[0], range[1], self.Motors_range[i][0], self.Motors_range[i][1]) for i, pos in enumerate(pose_positions)]
 
         #add the knee joint angles ==> hip joint angles
-        servo_positions[3] = self.get_Motor2_inverse_kinematics(servo_positions[2], servo_positions[3])
-        servo_positions[5] = self.get_Motor2_inverse_kinematics(servo_positions[4], servo_positions[5])
+        servo_positions[3] = math.pi - self.InverseKinematics(servo_positions[3], servo_positions[2])
+        servo_positions[5] = math.pi - self.InverseKinematics(servo_positions[5], servo_positions[4])
 
         #transform the spine joint angles
-        servo_positions[0] = np.clip(pose_positions[1]*45+pose_positions[0]*-45, -45, 45)/180*math.pi
-        servo_positions[1] = np.clip(pose_positions[1]*45+pose_positions[0]*-45, -45, 45)/180*math.pi
+        servo_positions[0] = np.clip(pose_positions[1]*45+pose_positions[0]*-50, -50, 30)/180*math.pi
+        servo_positions[1] = np.clip(pose_positions[1]*-45+pose_positions[0]*-50, -50, 30)/180*math.pi
 
         self.send_motor_commands(servo_positions)
 
@@ -267,7 +270,6 @@ class Rabbit_real:
         motor_commands: list with the motor commands in the order of the motors
         """
         #convert radians to 0 -4094
-        motor_commands = [int(self._map(motor, -math.pi, math.pi, 0, 4094)) for i, motor in enumerate(motor_commands)]
         print("motor_commands", motor_commands)
         self.servoControler.action_queue.put({"positions": motor_commands, "speeds": [4094]*8})
 
@@ -314,6 +316,81 @@ class Rabbit_real:
         """
         return (x-in_min)*(out_max-out_min)/(in_max-in_min)+out_min
     
+    def InverseKinematics(self, Knee_angle, FrontHip_angle, degree=False):
+        """
+        give the angle of the Knee and FrontHip.
+        Returns: the angle of the BackHip = b1. b1 goes counted anticlockwise from 0 to 2*pi
+        """
+        pi = math.pi
+        #Motor 1 Position
+        Motor1_coo = np.array([0, 0])
+
+        #set some constants
+        S1 = 0.07#FrontHip to Knee
+        S4 = 0.03#Knee to MiddleUnderLeg
+        t2 = np.array([0.03, 0])#Distance between the FrontHip and the BackHip
+        S2 = 0.04#BackHip to Knee2
+        S3 = 0.07#Knee2 to MiddleUnderLeg
+
+        S5 = 0.03#MiddleUnderLeg to Foot
+        FrontHip_angle = -FrontHip_angle
+        Knee_angle = -Knee_angle
+        if degree:
+            FrontHip_angle = FrontHip_angle/180*math.pi
+            Knee_angle = Knee_angle/180*math.pi
+        
+        a1 = self._map(FrontHip_angle, -math.pi, math.pi, 0, 2*math.pi)
+        a2 = 0.5*math.pi-Knee_angle
+
+        print("a1:", a1/pi*180, "a2:", a2/pi*180, "Knee_angle:", Knee_angle/pi*180, "FrontHip_angle:", FrontHip_angle/pi*180)
+
+
+        #calculate the angle of the BackHip
+        # m1 = np.array([math.cos(-a1+pi), math.sin(-a1+pi)])*S1
+        # m4 = np.array([math.cos(-a1+pi*1.5-a2), math.sin(-a2+pi*1.5-a2)])*S4
+        # m5 = np.array([math.cos(-a1+pi*1.5-a2), math.sin(-a2+pi*1.5-a2)])*S5
+        m1 = np.array([math.cos(a1), math.sin(a1)])*S1
+        m4 = np.array([math.cos(a1+a2), math.sin(a1+a2)])*S4
+        m5 = np.array([math.cos(a1+a2), math.sin(a1+a2)])*S5
+
+
+        #show_arms(m1, (0,0), (0, 0), m4, m5, t2)
+        P = m1+m4+m5
+        T = m1+m4
+        t1_vec =  T-t2
+        t1 = np.linalg.norm(t1_vec)
+
+        z = (S2**2-S3**2+t1**2)/(2*S2*t1)
+        # shoulden't be greater than 1
+        if z > 1:
+            z = 1
+            print("z is greater than 1")
+        elif z < -1:
+            z = -1
+            print("z is smaller than -1")
+
+        phi1 = math.acos(z)
+        
+        #atan doesn't give angels above 90 degrees, so I have to calculate with sin and cos
+        #phi2 = math.asin(t1_vec[1]/(t1_vec[0]**2+t1_vec[1]**2)**0.5)
+        if t1_vec[0] > 0:
+            phi2 = math.atan(t1_vec[1]/t1_vec[0])
+            phi2 = pi+phi2
+        elif t1_vec[0] < 0:
+            phi2 = math.atan(t1_vec[1]/t1_vec[0])
+        else:
+            phi2 = pi/2
+
+        #phi2 = math.atan2(t1_vec[1], t1_vec[0])
+
+        
+        b1 = phi1+phi2
+        m2 = np.array([math.cos(b1+pi)*S2, math.sin(b1+pi)*S2])
+        m3 = t1_vec-m2
+        print("phi1: ", phi1, "phi2: ", phi2, t1_vec, "b1", b1/pi*180)
+
+
+        return b1
     
     def get_Motor2_inverse_kinematics(self, FrontHip_angle, Knee_angle, degree=False):
         """
@@ -390,14 +467,16 @@ class Rabbit_real:
 
 
         return b1
-    
+
     def close(self):
-        """Close the connection to the robot
+        """Close the robot
         """
         self.servoControler.stop_run()
         self.servoControler.close()
+        self.cam.close()
+        #p.disconnect()
 
-
+        
 if __name__=="__main__":
     import time
     real_rabbit = Rabbit_real()

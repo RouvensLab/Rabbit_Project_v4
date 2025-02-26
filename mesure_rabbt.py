@@ -21,7 +21,7 @@ from Objects.Rabbit_v3 import Rabbit
 from Real_robot.real_rabbit import Rabbit_real
 
 def get_measuredRabbit(rabbit_type = Rabbit_real, 
-                       state_types_body=["base_position", "head_orientation", "head_acceleration" ], 
+                       state_types_body=["base_position", "head_orientation", "head_linear_acceleration" ], 
                        state_types_servos=["joint_angles", "joint_velocities", "joint_torques"], 
                        trajectory_data_structure= ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "joint_action_rate", "joint_action_acceleration"]
                        ):
@@ -50,7 +50,7 @@ def get_measuredRabbit(rabbit_type = Rabbit_real,
             self.trajectory_recorder = None
             self.trajectory_data_structure = trajectory_data_structure
             self.getTrajectoryData_func = self.create_get_informations(self.trajectory_data_structure)
-            print("creating get functions succeededy")
+            #print("creating get functions succeededy")
 
         def create_seperate_Window(self):
             self.thread = threading.Thread(target=self.init_Gui)
@@ -166,7 +166,7 @@ class PlotterWidget(QWidget):
         #self.plot_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         #self.plot_widget.setFixedSize(800, 600)  # Set fixed size for the plot widget
         self.plot = list(None for _ in range(len(Body_GraphLabels)+len(Servos_GraphLabel)+10))
-        print(self.plot)
+        #print(self.plot)
 
         # Setup body graphs
         self.body_labels = ["x", "y", "z"]
@@ -181,7 +181,7 @@ class PlotterWidget(QWidget):
         self.curves_array_body = np.zeros((len(Body_GraphLabels), self.time_size_limit, len(self.body_labels)), dtype=np.float16)
         self.curves_array_servos = np.zeros((len(Servos_GraphLabel), self.time_size_limit, len(self.servo_labels)), dtype=np.float16)
         self.time_array = np.zeros(self.time_size_limit, dtype=np.float16)
-        print(self.curves_array_body, self.curves_array_body.shape)
+        #print(self.curves_array_body, self.curves_array_body.shape)
 
         self.scroll_layout.addWidget(self.plot_widget)
         self.scroll_area.setWidget(self.scroll_content)
@@ -235,7 +235,7 @@ class PlotterWidget(QWidget):
 
 
     def update_add_Plots(self, time, BodyData, ServoData):
-        print("Update Plots")
+        #print("Update Plots")
         # print(BodyData)
         # print(ServoData)
         if time - self.last_time > 0:
@@ -255,11 +255,11 @@ class PlotterWidget(QWidget):
             self.curves_array_body = np.concatenate([new_curves_array_body, BodyData_array], axis=1)
             #for the servo data
             ServoData_array = np.array(ServoData)
-            print("Bevore", ServoData_array, ServoData_array.shape)
+            #print("Bevore", ServoData_array, ServoData_array.shape)
             ServoData_array = np.expand_dims(ServoData_array, axis=1)
-            print("After expansion", ServoData_array, ServoData_array.shape)
+            #print("After expansion", ServoData_array, ServoData_array.shape)
             new_curves_array_servos = self.curves_array_servos[:, 1:, :]
-            print("wanted for concatenation", new_curves_array_servos.shape)
+            #print("wanted for concatenation", new_curves_array_servos.shape)
             self.curves_array_servos = np.concatenate([new_curves_array_servos, ServoData_array], axis=1)
 
         else:
@@ -299,17 +299,17 @@ class PlotterWidget(QWidget):
     # ...existing code...
     
     def run(self):
-        self.i += 1
-        rand_data = lambda: math.sin(self.i/10) + np.random.normal(0, 0.1)
-        self.queue.put([self.i, 
-                    [
-                    [rand_data(), rand_data(), rand_data()], 
-                    [rand_data(), rand_data(), rand_data()], 
-                    [rand_data(), rand_data(), rand_data()]
-                    ], 
-                    [
-                    [rand_data(), rand_data(), rand_data(), rand_data(), rand_data(), rand_data(), rand_data(), rand_data()], 
-                    ]])
+        # self.i += 1
+        # rand_data = lambda: math.sin(self.i/10) + np.random.normal(0, 0.1)
+        # self.queue.put([self.i, 
+        #             [
+        #             [rand_data(), rand_data(), rand_data()], 
+        #             [rand_data(), rand_data(), rand_data()], 
+        #             [rand_data(), rand_data(), rand_data()]
+        #             ], 
+        #             [
+        #             [rand_data(), rand_data(), rand_data(), rand_data(), rand_data(), rand_data(), rand_data(), rand_data()], 
+        #             ]])
         while not self.queue.empty():
         #plotter.update_add_Plots(0, [[0, 0, 0], [0, 0, 0], [0, 0, 0]], [[0, 0, 0], [0, 0, 0], [0, 0, 0]])
             try:

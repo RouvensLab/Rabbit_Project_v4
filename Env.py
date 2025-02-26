@@ -18,18 +18,8 @@ class Simulation:
     ):
         super().__init__()
         self.GUI = gui
-
-
-        #initialization of pybullet
-        if self.GUI:
-            connection_id = p.connect(p.GUI)            #RL 2024
-        else:
-            connection_id = p.connect(p.DIRECT)         #RL 2024
-
-        print(p.isConnected())
-        #the frequency of the simulation
-        print("PhysicsEngineParameter: ",p.getPhysicsEngineParameters())
-
+        self.connection_id = None
+        self.initialize_physics_server()
         
         #the ground of the simulation needs to be created first. Afterwards the rabbit can be created
         self.ground = Terrain(terrain_type)
@@ -72,6 +62,23 @@ class Simulation:
         #self.rabbit.send_motor_commands([0, 0, 0, 0,  0, 0,0,   0, 0,0,   0, 0])
         #self.rabbit.add_UserControlPanel(all_joints=False)
         p.stepSimulation()
+
+    def initialize_physics_server(self):
+        if self.connection_id is not None:
+            try:
+                p.disconnect(self.connection_id)
+            except:
+                pass
+                
+        try:
+            if self.GUI:
+                self.connection_id = p.connect(p.GUI)
+            else:
+                self.connection_id = p.connect(p.DIRECT)
+        except Exception as e:
+            print(f"Failed to connect to physics server: {e}")
+            self.connection_id = None
+            raise
 
     def __del__(self):
         p.disconnect()
@@ -124,24 +131,32 @@ class Simulation:
             self.last_time = time.time()
 
     def close(self):
-        p.disconnect()
+        if self.connection_id is not None:
+            try:
+                p.disconnect(self.connection_id)
+                self.connection_id = None
+            except:
+                pass
 
 if __name__ == "__main__":
     env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
-    env.rabbit.create_seperate_Window()
-    env.show_world_coordinate_system()
-    #env.rabbit.add_UserControlPanel(all_joints=False)
+    # env.rabbit.create_seperate_Window()
+    #env.show_world_coordinate_system()
+    env.rabbit.add_UserControlPanel(all_joints=False)
     # env.rabbit.get_link_infos()
     # time.sleep(10000)
     funktion = env.rabbit.create_get_informations(["joint_angles"])
     while True:
         print("step start")
+        time.sleep(0.1)
         env.Sim_step()
         env.rabbit.send_goal_pose([1, 1, 1, 1, 1, 1, 1, 1])
-        print(funktion())
+        print("Joint angles", funktion())
 
-        time.sleep(0.01)
+        time.sleep(0.1)
         print("step")
+        env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
+        print("Joint angles", funktion())
 
         # for i in range(100):
         #     # Send new command to the motors

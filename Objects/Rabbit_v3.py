@@ -6,6 +6,12 @@ from PySide6.QtGui import QGuiApplication
 
 class Rabbit:
     """A class to represent a rabbit in the simulation
+
+    Infos/Checklist:
+    - [x] Input and output are identical
+    - [x] The motors are in the right orientation
+    - [x] The motors are in the right range
+
     """
     
     def __init__(self, init_pos= [0, 0, 0]):
@@ -140,7 +146,7 @@ class Rabbit:
         # Ensure that motors_10_value contains numerical values
 
         if len(motors_12_value) != 12:
-            raise ValueError("The list with the motor values has to have 12 values")
+            raise ValueError("The list with the motor values has to have 12 values, but has ", len(motors_12_value))
         
         if any(isinstance(value, float) or isinstance(value, int) for value in motors_12_value):
             return [(motors_12_value[0] - motors_12_value[3]) / 2, 
@@ -202,18 +208,27 @@ class Rabbit:
 
                 
                 ]
-        
-    def calculate_foot_position(self, Motor1, knee_angle):
-        """Calculate the position of the foot
-        Motor1: the position of the motor 1 (rad)
-        knee_angle: the position of the knee joint (rad)
-        return: the position of the foot
 
-        PS: This is not precise. But in the near
-
+    
+    def convert_12_to_right_orientation(self, motors_12_value):
+        """Convert the 12 motor values to the right orientation
+        Doesn't make changes
+        From symetrical to asymetrical. (Because the servos are mounted in a different orientation)
         """
-        foot_angle = -knee_angle
-        return foot_angle
+        new_orn_values = [0]*12
+        orientation_data = [0, 0, 0, 0,   0, 0, 0,   0, 0, 0,  0, 0]
+        for i, value in enumerate(motors_12_value):
+            if orientation_data[i] == 1:
+                if isinstance(value, tuple) or isinstance(value, list) or isinstance(value, np.ndarray):
+                    print("Test:", value)
+                    new_orn_values[i] = -np.array([value[1], value[0]])
+                elif isinstance(value, float):
+                    new_orn_values[i] = -value
+            else:
+                new_orn_values[i] = value
+        return new_orn_values
+        
+
         
 
 
@@ -315,9 +330,6 @@ class Rabbit:
         self.worldLinkAngularVelocity = worldLinkAngularVelocity
         self.worldLinkLinearVelocity = worldLinkLinearVelocity
 
-        
-    
-    
     def update_action_history(self, actions):
         """
         Store the current actions and the current time (self.lifetime)
@@ -369,23 +381,19 @@ class Rabbit:
         action_acceleration = (rate2 - rate1) / dt_rate
         return action_acceleration
     
-    # def get_camera_image(self, width=320, height=240):
-    #     """Get the camera image
-    #     """
-    #     view_matrix = p.computeViewMatrixFromYawPitchRoll(cameraTargetPosition=[0, 0, 0], distance=1, yaw=90, pitch=-90, roll=0, upAxisIndex=2)
-    #     projection_matrix = p.computeProjectionMatrixFOV(fov=60, aspect=width/height, nearVal=0.1, farVal=100)
-    #     image = p.getCameraImage(width=width, height=height, viewMatrix=view_matrix, projectionMatrix=projection_matrix)
-    #     return image
-    
     def send_goal_pose(self, pose_positions, range=[-1, 1]):
         """
         This sends the goal pose to the robot. The default range is from -1 to 1
         pose_positions: list with the goal positions of the servos, with the used range. e.g. [0,0,   0,0,   0,0,   0,0]
         """
         #map the servo_positions to the range of the servos
+        # print("pose_positions:", pose_positions)
+        # print("Motors_range:", self.Motors_range)
         servo_positions = self.convert_8_to_12_motors(pose_positions)
-        servo_positions = [self._map(pos, range[0], range[1], self.Motors_range[i][0], self.Motors_range[i][1]) for i, pos in enumerate(servo_positions)]
+        #print("after servopositions:", servo_positions)
 
+        servo_positions = [self._map(pos, range[0], range[1], self.Motors_range[i][0], self.Motors_range[i][1]) for i, pos in enumerate(servo_positions)]
+        #servo_positions = [self.Motors_range[i][0] + (self.Motors_range[i][1] - self.Motors_range[i][0]) * (pos + 1) / 2 for i, pos in enumerate(servo_positions)]
         #add the foot_angles
         servo_positions[6] = self.calculate_foot_position(servo_positions[4], servo_positions[5])
         servo_positions[9] = self.calculate_foot_position(servo_positions[7], servo_positions[8])
@@ -399,6 +407,8 @@ class Rabbit:
         motor_commands: list with the motor commands in the order of the motors
         
         """
+        # print("motor_commands 12 Dimensions:", motor_commands)
+        # print("motor_commands 8 Dimensions:", self.convert_12_to_8_motors(motor_commands))
         for i, position in zip(self.Joints_index, motor_commands):
             p.setJointMotorControl2(self._id, i, p.POSITION_CONTROL, targetPosition=position, force=self.MAXFORCE, maxVelocity=self.MAXVELOCITY)
 
@@ -505,16 +515,26 @@ class Rabbit:
         for i in range(self.numJoints):
             p.resetJointState(self._id, i, 0, 0)
 
-        self.send_motor_commands([0, 0, 0, 0,  0, 0,  0, 0,  0, 0])
+        #self.send_motor_commands([0, 0, 0, 0,  0, 0,0,  0, 0,0,  0, 0])
         for i in range(self.numJoints):
             p.resetJointState(self._id, i, targetValue=0, targetVelocity=0)
-
-        #set the motors to the initial position
-        self.send_motor_commands([0, 0, 0, 0,  0, 0,  0, 0,  0, 0])
-
-
+        self.send_goal_pose([0, 0,  0, 0,  0, 0,  0, 0])
+        #reset the head sensors
+        self.update_head_sensors()
 
 
+
+    def calculate_foot_position(self, Motor1, knee_angle):
+        """Calculate the position of the foot
+        Motor1: the position of the motor 1 (rad)
+        knee_angle: the position of the knee joint (rad)
+        return: the position of the foot
+
+        PS: This is not precise. But in the near
+
+        """
+        foot_angle = -knee_angle
+        return foot_angle
 
 
     def get_kneeJoint_inverse_kinematics(self, Motor1_angel, Motor2_angle):
