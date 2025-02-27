@@ -118,6 +118,7 @@ class ServoSupervisor(threading.Thread):
                 servo_pres[servo_id] = None
 
         return servo_pres
+    
 
     def _map_array(self, x:np.ndarray, in_min:float, in_max:float, out_min:float, out_max:float):
         # In order to map array the in_min, in_max, out_min, out_max should be to an array
@@ -203,23 +204,23 @@ class ServoSupervisor(threading.Thread):
         if data_type not in self.upToDate_dataTypes:
             self.upToDate_dataTypes.append(data_type)
             #add the data_type to the GroupSyncReads
-            print(f"ADR: {self.servo_state_structure[data_type][2]}, Lenght: {self.servo_state_structure[data_type][3]}")
-            groupSyncRead_obj = GroupSyncRead(ph=self.packetHandler, 
-                                              start_address=self.servo_state_structure[data_type][2], 
-                                              data_length=self.servo_state_structure[data_type][3])
-            #groupSyncRead_obj.clearParam()
-            for servoID in self.servoIDs:
-                scs_addparam_result = groupSyncRead_obj.addParam(servoID)#false means that the scs_id was already added
-                if scs_addparam_result != True:
-                    print("[ID:%03d] groupSyncRead addparam failed" % servoID) if self.showErrors else None
-            self.GroupSyncReads[data_type] = groupSyncRead_obj
+            # print(f"ADR: {self.servo_state_structure[data_type][2]}, Lenght: {self.servo_state_structure[data_type][3]}")
+            # groupSyncRead_obj = GroupSyncRead(ph=self.packetHandler, 
+            #                                   start_address=self.servo_state_structure[data_type][2], 
+            #                                   data_length=self.servo_state_structure[data_type][3])
+            # #groupSyncRead_obj.clearParam()
+            # for servoID in self.servoIDs:
+            #     scs_addparam_result = groupSyncRead_obj.addParam(servoID)#false means that the scs_id was already added
+            #     if scs_addparam_result != True:
+            #         print("[ID:%03d] groupSyncRead addparam failed" % servoID) if self.showErrors else None
+            # self.GroupSyncReads[data_type] = groupSyncRead_obj
             self.Data_Stack[data_type] = [0]*len(self.servoIDs)
         
     def remove_dataType(self, data_type):
         if data_type in self.upToDate_dataTypes:
             self.upToDate_dataTypes.remove(data_type)
             #remove the data_type from the GroupSyncReads
-            self.GroupSyncReads.pop(data_type)
+            # self.GroupSyncReads.pop(data_type)
             self.Data_Stack.pop(data_type)
 
     def update_states_serial(self):
@@ -276,7 +277,7 @@ class ServoSupervisor(threading.Thread):
             data, sts_comm_result, sts_error = self.packetHandler.ReadVoltage(scs_id)
         elif dataType == "Current":
             data, sts_comm_result, sts_error = self.packetHandler.ReadCurrent(sts_id=scs_id)
-        elif data == "Temperature":
+        elif dataType == "Temperature":
             data, sts_comm_result, sts_error = self.packetHandler.ReadTemperature(sts_id=scs_id)
         elif dataType == "TorqueEnable":
             data, sts_comm_result, sts_error = self.packetHandler.ReadTorqueEnable(sts_id=scs_id)
@@ -290,8 +291,7 @@ class ServoSupervisor(threading.Thread):
     
 
     def update_states(self):
-        for dataType, groupSync_obj in self.GroupSyncReads.items():
-
+        for dataType, groupSync_obj in self.Data_Stack.items():
             for index, scs_id in enumerate(self.servoIDs):
                 data = self.update_singel_state(dataType, scs_id)
                 self.Data_Stack[dataType][index] = data
@@ -412,14 +412,14 @@ class ServoSupervisor(threading.Thread):
                     action = self.action_queue.get()
                     if action is not None:
                         # Execute the action
-                        start_time = time.time()
                         not self.send_command(action["positions"], action["speeds"])
-                        print(f"Time: {time.time()-start_time}")
                         print("Action executed")
                         self.action_queue.task_done()
                 else:
                     # If no actions are available, update the states
+                    start_time = time.time()
                     self.update_states()
+                    print(f"Time: {time.time()-start_time}")
                    # self.partial_update_states(send_pace)
                 
                 #show the current states
@@ -452,7 +452,7 @@ if __name__ == "__main__":
         # time.sleep(1)
         # supervisor.action_queue.put({"positions": [0]*8, "speeds": [4000]*8})
         time.sleep(1)
-        action_input = [math.pi/4]*8
-        #supervisor.action_queue.put({"positions": action_input, "speeds": [4000]*8})
+        action_input = [0]*8
+        supervisor.action_queue.put({"positions": action_input, "speeds": [4000]*8})
         print(action_input)
-        print(getFunction()[1])
+        print(getFunction())

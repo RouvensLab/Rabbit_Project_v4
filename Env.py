@@ -42,7 +42,7 @@ class Simulation:
             from mesure_rabbt import get_measuredRabbit
             self.rabbit = get_measuredRabbit(Rabbit_real,
                                             state_types_body=["head_orientation", "head_angular_velocity", "head_linear_acceleration" ], 
-                                            state_types_servos=["joint_current", "joint_velocities", "joint_torques"], 
+                                            state_types_servos=["joint_currents", "joint_velocities", "joint_torques", "joint_angles"], 
                                             trajectory_data_structure= []
                                              )([0, 0, 0.15])
             #self.rabbit.init_Gui()
@@ -139,23 +139,25 @@ class Simulation:
                 pass
 
 if __name__ == "__main__":
-    env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
-    # env.rabbit.create_seperate_Window()
+    env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_real_mesured")
+    env.rabbit.create_seperate_Window()
     #env.show_world_coordinate_system()
-    env.rabbit.add_UserControlPanel(all_joints=False)
+    #env.rabbit.add_UserControlPanel(all_joints=False)
     # env.rabbit.get_link_infos()
     # time.sleep(10000)
     funktion = env.rabbit.create_get_informations(["joint_angles"])
+    env.rabbit.servoControler.set_torque_state(7, True)
+    env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
     while True:
         print("step start")
         time.sleep(0.1)
         env.Sim_step()
-        env.rabbit.send_goal_pose([1, 1, 1, 1, 1, 1, 1, 1])
+        #env.rabbit.send_goal_pose([1, 1, 1, 1, 1, 1, 1, 1])
         print("Joint angles", funktion())
 
         time.sleep(0.1)
         print("step")
-        env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
+        #env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
         print("Joint angles", funktion())
 
         # for i in range(100):

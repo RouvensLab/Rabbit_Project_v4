@@ -116,20 +116,39 @@ class SeparateWindow(QMainWindow):
         self.resize(600, 400)
         self.setCentralWidget(Plotter)
 
+# Widget for managing servo checkboxes to toggle visibility
+class ServoCheckboxesWidget(QWidget):
+    """A widget that shows a list with checkboxes for every Servo
+    So wether the ServoData should be visible or not.
+    """
+    def __init__(self, Servo_Names, Servos_id_change_func_list):
+        super().__init__()
+        self.main_layout = QHBoxLayout()
+        for index, name in enumerate(Servo_Names):
+            servo_checkbox = QCheckBox(name, self)
+            servo_checkbox.setChecked(True)
+            servo_checkbox.toggled.connect(lambda checked, index=index: Servos_id_change_func_list(index, checked))
+            self.main_layout.addWidget(servo_checkbox)
+        self.setLayout(self.main_layout)
 
 # Main plotting widget to visualize data
 class PlotterWidget(QWidget):
-    def __init__(self, queue: queue.Queue, Body_GraphLabels, Servos_GraphLabel, n_Servos):
+    def __init__(self, queue: queue.Queue, Body_GraphLabels, Servos_GraphLabel, n_Servos, time_window=150):
         super().__init__()
         self.queue = queue
+        self.time_size_limit = time_window
 
         self.Body_GraphLabels = Body_GraphLabels
         self.Servos_GraphLabel = Servos_GraphLabel
+        self.body_labels = ["x", "y", "z"]
+        self.servo_labels = ["Servo 1", "Servo 2", "Servo 3", "Servo 4", "Servo 5", "Servo 6", "Servo 7", "Servo 8"]
 
         self.main_layout = QVBoxLayout()
 
         self.TrajRecorder = Recorder()
         self.main_layout.addWidget(self.TrajRecorder)
+        self.ServoCheckboxes = ServoCheckboxesWidget(self.servo_labels, self.toggle_servo_visibility)
+        self.main_layout.addWidget(self.ServoCheckboxes)
 
         self.last_time = 0
 
@@ -144,20 +163,7 @@ class PlotterWidget(QWidget):
         self.timer.timeout.connect(self.run)
         self.timer.start(50)  # Check the queue every 100 ms
 
-        # Widget for managing servo checkboxes to toggle visibility
-        class ServoCheckboxesWidget(QWidget):
-            """A widget that shows a list with checkboxes for every Servo
-            So wether the ServoData should be visible or not.
-            """
-            def __init__(self, Servo_Names, Servos_id_change_func):
-                super().__init__()
-                self.main_layout = QVBoxLayout()
-                for index, name in enumerate(Servo_Names):
-                    servo_checkbox = QCheckBox(name, self)
-                    servo_checkbox.setChecked(True)
-                    servo_checkbox.toggled.connect(lambda checked, index=index: Servos_id_change_func(index, checked))
-                    self.main_layout.addWidget(servo_checkbox)
-                self.setLayout(self.main_layout)
+
 
         # ...existing code...
 
@@ -169,15 +175,12 @@ class PlotterWidget(QWidget):
         #print(self.plot)
 
         # Setup body graphs
-        self.body_labels = ["x", "y", "z"]
         self.curves_body, last_plot, last_row = self.create_graphs(Body_GraphLabels, body_labels=self.body_labels)
         # Setup servo graphs
-        self.servo_labels = ["Servo 1", "Servo 2", "Servo 3", "Servo 4", "Servo 5", "Servo 6", "Servo 7", "Servo 8"]
         self.curves_servos, last_plot, last_row = self.create_graphs(Servos_GraphLabel, last_plot=last_plot, last_row=last_row, body_labels=self.servo_labels)
         last_plot.getAxis('bottom').setStyle(showValues=True)
 
         #create limited arrays for the data.
-        self.time_size_limit = 100
         self.curves_array_body = np.zeros((len(Body_GraphLabels), self.time_size_limit, len(self.body_labels)), dtype=np.float16)
         self.curves_array_servos = np.zeros((len(Servos_GraphLabel), self.time_size_limit, len(self.servo_labels)), dtype=np.float16)
         self.time_array = np.zeros(self.time_size_limit, dtype=np.float16)
@@ -326,8 +329,10 @@ class PlotterWidget(QWidget):
 
 
     
-    def toggle_visibility(self, curve):
-        curve.setVisible(not curve.isVisible())
+    def toggle_servo_visibility(self, servo_id, checked):
+        """Toggle visibility of all curves for a specific servo ID across all servo graphs"""
+        for graph_curves in self.curves_servos:  # Iterate over each servo graph (angles, velocities, torques)
+            graph_curves[servo_id].setVisible(checked)  # Toggle the curve for this servo ID
         
 
 

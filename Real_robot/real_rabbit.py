@@ -480,7 +480,6 @@ class Rabbit_real:
 if __name__=="__main__":
     import time
     real_rabbit = Rabbit_real()
-
     while True:
         real_rabbit.step(0.01)
         real_rabbit.send_goal_pose([0, 0,    0, 0,  0, 0,    0, 0])
