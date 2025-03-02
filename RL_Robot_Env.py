@@ -41,8 +41,8 @@ class RL_Robot(Env):
             from Real_robot.real_rabbit import Rabbit_real
             from mesure_rabbt import get_measuredRabbit 
             self.rabbit = get_measuredRabbit(Rabbit_real,
-                                            state_types_body=["head_orientation", "head_linear_acceleration", "head_angular_velocity"], 
-                                            state_types_servos=["joint_angles"], 
+                                            state_types_body=["head_orientation", "head_linear_acceleration", "head_angular_velocity", "total_current"], 
+                                            state_types_servos=["joint_currents"], 
                                             trajectory_data_structure= ["joint_torques"]
                                                 )()
             #self.rabbit.create_seperate_Window()
@@ -278,9 +278,10 @@ class PhaseGenerator:
     
 if __name__ == "__main__":
     env = RL_Robot(RobotType="Rabbit_mesured")
+    env.rabbit.create_seperate_Window()
     env.reset()
-    for _ in range(1000):
-        action = env.action_space.sample()
+    for _ in range(100000):
+        action = [0]*8#env.action_space.sample()
         print(action)
         obs, rew, done, trunc, info = env.step(action)
         if done:

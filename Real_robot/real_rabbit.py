@@ -10,7 +10,8 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 sys.path.append(project_root)
 
 from Real_robot.ServoSupervisor_v1 import ServoSupervisor
-from Real_robot.Camera_v3 import Camera
+from Real_robot.Cameras.Camera_v3 import Camera
+from Real_robot.Oscilloscope.RigolOszRead import OscilloscopeReader
 
 class Rabbit_real:
     """A class to represent a rabbit in the simulation
@@ -31,6 +32,11 @@ class Rabbit_real:
         
         #camera and accelerometer
         self.cam = Camera()
+
+        #create the RigolOszReader
+        self.oscilloscope = OscilloscopeReader()
+        self.oscilloscope.connect()
+        self.oscilloscope.start_reading()
 
 
         #UserControlPanel_added
@@ -155,7 +161,8 @@ class Rabbit_real:
                 transformed_state_type = trans_types[joint_types.index(state_type)]
                 left_joint_types.append(transformed_state_type)
                 lambda_list.append(self.servoControler.create_get_inf(transformed_state_type))
-
+            elif "total_current" in state_type:
+                lambda_list.append(lambda: [self.get_total_current(), 0, 0])
             elif "vision"== state_type:
                 #get the camera image from the camera at the head of the rabbit
                 lambda_list.append(lambda: self.get_camera_image())
@@ -178,6 +185,12 @@ class Rabbit_real:
         """Get the camera image
         """
         return self.cam.get_frame()
+    
+    def get_total_current(self):
+        """Get the total current of the robot
+        """
+        value = self.oscilloscope.get_channel1_value()
+        return self.oscilloscope.calc_current(value)
     
     def get_head_sensors(self):
         """Get the orientation and velocity of the robot
@@ -483,10 +496,10 @@ if __name__=="__main__":
     while True:
         real_rabbit.step(0.01)
         real_rabbit.send_goal_pose([0, 0,    0, 0,  0, 0,    0, 0])
-        get_func = real_rabbit.create_get_informations(["head_orientation", "head_angular_velocity", "head_linear_acceleration", "joint_angles", "joint_torques", "joint_velocities"])
+        get_func = real_rabbit.create_get_informations(["head_orientation", "head_angular_velocity", "head_linear_acceleration", "joint_angles", "joint_torques", "joint_velocities", "total_current"])
         print(get_func())
         time.sleep(1)
-        real_rabbit.send_goal_pose([0.3, 0.3,    0.3, 0.3,  0.3, 0.3,    0.3, 0.3])
+        real_rabbit.send_goal_pose([0.1, 0.1,    0.1, 0.1,  0.1, 0.1,    0.1, 0.1])
         time.sleep(1)
 
     

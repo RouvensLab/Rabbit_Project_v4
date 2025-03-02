@@ -145,25 +145,25 @@ class RL_Env(Env):
             # Weights from the provided reward function
             weights = {
                 # Imitation
-                "torso_pos": 8.0,
-                "torso_orient": 4.0,
+                "torso_pos": 1.0,
+                "torso_orient": 2.0,
                 "linear_vel_xy": 0.5,
-                "linear_vel_z": 1.5,
+                "linear_vel_z": 0.5,
                 "angular_vel_xy": 0.5,
                 "angular_vel_z": 0.5,
-                "LegJoint_pos": 6.0,
-                "LegJoint_vel": 0.5,
-                "component_coordinates_world": 3.0,
+                "LegJoint_pos": 3.0,
+                "LegJoint_vel": 0.25,
+                "component_coordinates_world": 2.0,
                 #"Contact": 1.0,
 
                 # Regularization
                 "Joint_torques": 0.15,
                 "Joint_acc": 0.15,
-                "action_rate": 0.8,
+                "action_rate": 1.0,
                 "action_acc": 0.05,
 
                 # Survival
-                "survival": 3.0,
+                "survival": 1.0,
             }
 
             def reverse_exp_reward(base, agent_value, expert_value, weight, normalize_value = 1):
@@ -191,7 +191,7 @@ class RL_Env(Env):
             base_position, base_orientation, base_linear_velocity, base_angular_velocity, joint_angles, joint_torques, joint_velocities, component_coordinates_world = self.get_rabbit_states()
             expert_position, expert_orientation, expert_linear_velocity, expert_angular_velocity, expert_joint_angles, expert_joint_torques, expert_joint_velocities, expert_component_coordinates_world = self.expert_states
             # Imitation
-            r_imitation += reverse_exp_reward(20, base_position, expert_position, weights["torso_pos"])
+            r_imitation += reverse_exp_reward(10, base_position, expert_position, weights["torso_pos"])
             r_imitation += reverse_exp_reward(20, base_orientation, expert_orientation, weights["torso_orient"], normalize_value=math.pi)
             #for the component cooddinates
             r_imitation += reverse_exp_reward(30, component_coordinates_world, expert_component_coordinates_world, weights["component_coordinates_world"])
