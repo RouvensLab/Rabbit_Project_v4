@@ -24,7 +24,7 @@ class RL_Env(Env):
                 simulation_Timestep = 0.1,
                 obs_time_space = 1, #in seconds
                 n_stack = 5,
-                recorded_movement_file_path_dic = {"StandingStill_v1": 4, 
+                recorded_movement_file_path_dic = {"Bewegung2": 4, 
                                                     },
                 terrain_type = "random_terrain",
                 restriction_2D = False,
@@ -153,6 +153,7 @@ class RL_Env(Env):
                 "angular_vel_z": 0.5,
                 "LegJoint_pos": 6.0,
                 "LegJoint_vel": 0.5,
+                "component_coordinates_world": 3.0,
                 #"Contact": 1.0,
 
                 # Regularization
@@ -187,12 +188,13 @@ class RL_Env(Env):
             # print("Expert States:", self.expert_states, len(self.expert_states))
             # print("Rabbit States:", self.get_rabbit_states(), len(self.get_rabbit_states()))
             #data_structure = ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities"]
-            base_position, base_orientation, base_linear_velocity, base_angular_velocity, joint_angles, joint_torques, joint_velocities = self.get_rabbit_states()
-            expert_position, expert_orientation, expert_linear_velocity, expert_angular_velocity, expert_joint_angles, expert_joint_torques, expert_joint_velocities = self.expert_states
+            base_position, base_orientation, base_linear_velocity, base_angular_velocity, joint_angles, joint_torques, joint_velocities, component_coordinates_world = self.get_rabbit_states()
+            expert_position, expert_orientation, expert_linear_velocity, expert_angular_velocity, expert_joint_angles, expert_joint_torques, expert_joint_velocities, expert_component_coordinates_world = self.expert_states
             # Imitation
-
             r_imitation += reverse_exp_reward(20, base_position, expert_position, weights["torso_pos"])
             r_imitation += reverse_exp_reward(20, base_orientation, expert_orientation, weights["torso_orient"], normalize_value=math.pi)
+            #for the component cooddinates
+            r_imitation += reverse_exp_reward(30, component_coordinates_world, expert_component_coordinates_world, weights["component_coordinates_world"])
             r_imitation += reverse_exp_reward(0.5, base_linear_velocity[:2], expert_linear_velocity[:2], weights["linear_vel_xy"])
             r_imitation += reverse_exp_reward(5, base_linear_velocity[2], expert_linear_velocity[2], weights["linear_vel_z"])
             r_imitation += reverse_exp_reward(0.5, base_angular_velocity[:2], expert_angular_velocity[:2], weights["angular_vel_xy"], normalize_value=math.pi)
@@ -271,7 +273,7 @@ class RL_Env(Env):
                 _array = np.array(obs) / (2*math.pi)
                 observation = np.concatenate([observation, _array])
             
-            elif self.observation_type_stacked[i] in ["base_position", "base_linear_velocity", "base_angular_velocity", "head_acceleration",  "joint_torques", "joint_velocities"]:
+            elif self.observation_type_stacked[i] in ["base_position", "base_linear_velocity", "base_angular_velocity", "head_linear_acceleration",  "joint_torques", "joint_velocities"]:
                 _array = np.clip(np.array(obs) / 100, -1, 1)
                 observation = np.concatenate([observation, _array])
 
@@ -308,6 +310,17 @@ class RL_Env(Env):
         # 
         #check if the observation is the right size
         if len(stacked_obs) != self.observation_size_stacked*self.n_stack+self.observation_size_solo:
+            print("Error")
+            #give all Information
+            print("stacked_obs", len(stacked_obs))
+            print("self.observation_size_stacked", self.observation_size_stacked)
+            print("self.n_stack", self.n_stack)
+            print("self.observation_size_solo", self.observation_size_solo)
+            print("self.observation_type_solo", self.observation_type_solo)
+            print("self.observation_type_stacked", self.observation_type_stacked)
+            print("self.get_rabbit_observation()", self.get_rabbit_observation())
+            print("self.get_rabbit_infos()", self.get_rabbit_infos())
+
             raise ValueError(f"Observation size is not correct. Got {len(stacked_obs)} but expected {self.observation_size_stacked*self.n_stack+self.observation_size_solo}")
         return stacked_obs
 
@@ -426,10 +439,26 @@ class PhaseGenerator:
 
     
 if __name__ == "__main__":
-    env = RL_Env(
-        RobotType="Rabbit_v3_mesured",
-    )
-    env.simulation.rabbit.create_seperate_Window()
+    env_param_kwargs = {
+        "ModelType": "SAC",
+        "RobotType": "Rabbit_v3",
+        "rewards_type": ["Disney_Imitation"],
+        "observation_type_stacked": ["head_orientation", "joint_torques"],
+        "observation_type_solo": ["phase_signal", "last_action", "User_command"],
+        "Horizon_Length": True,
+        "obs_time_space": 2,
+        "simulation_Timestep": 0.25,
+        "terrain_type": "flat",
+        "recorded_movement_file_path_dic": {
+                                             r"Bewegung2": 5,
+                                             },
+    }
+    env = RL_Env(**env_param_kwargs)
+
+    # env = RL_Env(
+    #     RobotType="Rabbit_v3_mesured",
+    # )
+    # env.simulation.rabbit.create_seperate_Window()
     env.reset()
     for _ in range(1000):
         action = env.action_space.sample()
@@ -441,6 +470,8 @@ if __name__ == "__main__":
         if done:
             env.reset()
         time.sleep(0.01)
+
+    #testing the env
     env.close()
 
 

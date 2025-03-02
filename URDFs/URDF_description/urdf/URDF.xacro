@@ -154,7 +154,7 @@
 <link name="Head_comp_v2_1">
   <inertial>
     <origin xyz="0.01000405917651935 0.01418921203389055 0.04202307290944826" rpy="0 0 0"/>
-    <mass value="0.08505795784466541"/>
+    <mass value="0.02505795784466541"/>
     <inertia ixx="0.00019" iyy="9.4e-05" izz="0.000141" ixy="-0.0" iyz="6.4e-05" ixz="0.0"/>
   </inertial>
   <visual>
@@ -343,7 +343,7 @@
 <link name="AtomS3R-M12_v1_1">
   <inertial>
     <origin xyz="8.382534673334607e-08 0.010542383576317621 0.0026915588221251823" rpy="0 0 0"/>
-    <mass value="0.011213792729013291"/>
+    <mass value="0.101"/>
     <inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="-0.0" iyz="0.0" ixz="0.0"/>
   </inertial>
   <visual>

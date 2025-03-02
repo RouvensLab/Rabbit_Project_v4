@@ -45,6 +45,19 @@ class TrajectoryRecorder:
             self.trajectory = data["trajectory"]
             self.trajectory_time = data["time"]
 
+    def get_keys(self):
+        return self.data_structure
+    def get_times(self):
+        return self.trajectory_time
+    def get_values(self):
+        return self.trajectory
+    
+    def get_keyValues(self, key):
+        index = self.data_structure.index(key)
+        values = [d[index] for d in self.trajectory]
+        return values
+    
+
     def convert_data_to_json_format(self, data):
         """
         Convert the data to a json serializable format

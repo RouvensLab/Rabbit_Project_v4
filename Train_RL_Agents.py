@@ -52,7 +52,7 @@ if __name__ == "__main__":
     #tr_model_replay_buffer_dir = r"expert_trajectories\recorded_data_sprinting_v1"
 
 
-    alg_name = "PPO"
+    alg_name = "SAC"
     ModellName = "Disney_Imitation_v1"
     main_dir = r"Models\\" + alg_name + ModellName
     models_dir = os.path.join(main_dir, "models")
@@ -63,16 +63,21 @@ if __name__ == "__main__":
     if not os.path.exists(logdir):
         os.makedirs(logdir)
     
-    total_timesteps = 10_000_000  # Increase total training steps
+    total_timesteps = 30_000_000  # Increase total training steps
 
     env_param_kwargs = {
         "ModelType": alg_name,
+        "RobotType": "Rabbit_v3",
         "rewards_type": ["Disney_Imitation"],
-        "observation_type": ["head_orientation", "head_acceleration", "head_angular_acceleration", "joint_torques"],
+        "observation_type_stacked": ["head_orientation", "joint_torques"],
+        "observation_type_solo": ["phase_signal", "last_action", "User_command"],
+        "Horizon_Length": False,
         "obs_time_space": 2,
+        "simulation_Timestep": 0.25,
         "terrain_type": "flat",
-        "recorded_movement_file_path_list": [r"Forwardsprinting_v1", 
-                                            ]
+        "recorded_movement_file_path_dic": {
+                                             r"Bewegung2": 5,
+                                             },
     }
 
     if alg_name == "SAC":
@@ -105,7 +110,7 @@ if __name__ == "__main__":
     if not show_last_results:
 
         # Make multiprocess env
-        num_cpu = 5 # Adjust the number of CPUs based on your machine
+        num_cpu = 2 # Adjust the number of CPUs based on your machine
         envs = SubprocVecEnv([make_env(i, env_param_kwargs=env_param_kwargs) for i in range(num_cpu)])
 
         #creates a documentation of the model hyperparameter, the environements parameter and other information concearned to the training, in the Model directory.
@@ -169,7 +174,7 @@ if __name__ == "__main__":
         
 
         model.learn(total_timesteps=total_timesteps, reset_num_timesteps=False,
-                    tb_log_name=alg_name, callback=[checkpoint_callback, AdaptiveLRCallback(model.policy.optimizer)])
+                    tb_log_name=alg_name, callback=[checkpoint_callback]) #AdaptiveLRCallback(model.policy.optimizer)])
 
         model.save(f"{models_dir}/final_model")
         model.save_replay_buffer(os.path.join(models_dir, f"rl_model_replay_buffer_{total_timesteps}_steps.pkl"))

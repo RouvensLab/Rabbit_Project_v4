@@ -19,6 +19,10 @@ class Rabbit:
         self._id = p.loadURDF(self.URDF_path, init_pos[0], init_pos[1], init_pos[2])
         self.init_pos = init_pos
 
+        self.focus_Robot = False
+        self.focus_pos = deque(maxlen=30)#to get a smooth focus on the robot
+        self.focus_orn = deque(maxlen=30)#to get a smooth focus on the robot
+
         #UserControlPanel_added
         self.UserControlPanel_added = False
         self.UserSlider = []
@@ -470,7 +474,31 @@ class Rabbit:
         else:
             return False
         
+    def toogle_focus(self):
+        self.focus_Robot = not self.focus_Robot
+        return self.focus_Robot
+        
+    def focus_on_robot(self):
+        # Get the robot's current position and orientation
+        pos, orn = p.getBasePositionAndOrientation(self.robot)
+        self.focus_pos.append(pos)
+        self.focus_orn.append(p.getEulerFromQuaternion(orn))
+        # Set the camera to look at the robot
+        # Dynamically update the camera to follow the robot
+        camera_distance = 0.5
+        camera_yaw = (np.mean([orn[2] for orn in self.focus_orn]))*180/math.pi
+        camera_pitch = -10
+        robot_pos = np.array(self.focus_pos).mean(axis=0)
+        # print("camera_yaw:", camera_yaw)
+        # print("robot_pos:", robot_pos)
 
+        p.resetDebugVisualizerCamera(
+            cameraDistance=camera_distance,
+            cameraYaw=camera_yaw,
+            cameraPitch=camera_pitch,
+            cameraTargetPosition=robot_pos,
+        )
+        # print("Camera focused on robot")
 
             
 
@@ -494,6 +522,8 @@ class Rabbit:
 
         self.update_action_history(self.convert_12_to_8_motors([p.getJointState(self._id, i)[0] for i in self.Joints_index]))
 
+        if self.focus_Robot:
+            self.focus_on_robot()
 
         #check if the user overrides the motor commands
         if self.check_UserOverride():

@@ -176,6 +176,7 @@ class ActionTimetableEditor(QMainWindow):
         "observation_type_stacked": [],
         "observation_type_solo": ["phase_signal"],
         "terrain_type": "flat",
+        "Horizon_Length":True ,
         "recorded_movement_file_path_dic": {"PushSprint_v1": 5}, 
         "restriction_2D": False
     }
@@ -203,7 +204,6 @@ class ActionTimetableEditor(QMainWindow):
         self.RLRobot_starup_parms = {"render_mode": "fast", "gui": True}
         self.RlRobot = None
         self._init_RlRobot()
-        self.RealRabbitMesure_widget = QWidget()
 
         self.initUI()
         self.env_pause = False
@@ -261,6 +261,13 @@ class ActionTimetableEditor(QMainWindow):
         except Exception as e:
             print(f"Error initializing RLRobot: {e}")
             self.RlRobot = None
+            self.RealRabbitMesure_widget = QWidget()
+            if hasattr(self, "RealObservation_tab"):
+                if self.RealObservation_tab.layout():
+                    QWidget().setLayout(self.RealObservation_tab.layout())
+                layout = QVBoxLayout()
+                layout.addWidget(self.RealRabbitMesure_widget)
+                self.RealObservation_tab.setLayout(layout)
             return False
 
     def run_simulation_with_error_handling(self):
@@ -674,6 +681,9 @@ class ActionTimetableEditor(QMainWindow):
                             elif self.isControled_dropdown.currentText() == "Only Real Robot":
                                 obs, reward, terminated, truncated, info = self.RlRobot.step(action)
                             done = (terminated or truncated) and self.auto_reset_checkbox.isChecked()
+
+                            if done:
+                                obs, inf = self.reset_simulation()
                         except Exception as e:
                             self.no_error = False
                             print(f"Error in environment step: {e}")
@@ -756,18 +766,19 @@ class ManualExpert:
         #self.action_timetable = {0.0: [-0.8, 0.0, -0.4, 0.6, -0.4, 0.6, 1.0, 1.0], 0.1: [0.8, 0.0, -0.4, 0.6, -0.4, 0.6, -0.7, -0.7], 0.2: [0.8, 0.0, 0.0, 0.3, 0.0, 0.3, -0.7, -0.7], 0.3: [-0.8, 0.0, -0.4, 0.6, -0.4, 0.6, 1.0, 1.0], 0.5: [-1.0, 0.0, -0.4, -0.6, -0.4, -0.6, -0.7, 0.8]}
         
         #other best reallive Expert
-        self.action_timetable = {0.0: [-0.8, 0.0, -0.0, 0.3, -0.0, 0.3, -1.0, -1.0], 0.2: [-0.3, 0.0, 0.25, 0.3, 0.25, 0.3, -1.0, -1.0], 0.3: [0.2, 0.0, 0.4, -0.6, 0.4, -0.6, 0.4, 0.4], 0.4: [-0.2, 0.0, -0.1, 0.5, -0.1, 0.5, 0.5, 0.5], 0.45: [-0.5, 0.0, -0.1, 0.5, -0.1, 0.5, 0.5, 0.5], 0.6: [-0.5, 0.0, -0.1, 0.3, -0.1, 0.3, 0.5, 0.5], 0.8: [-1.0, 0.0, -0.4, -0.6, -0.4, -0.6, 1.0, 1.0]}
+        #self.action_timetable = {0.0: [-0.8, 0.0, -0.0, 0.3, -0.0, 0.3, -1.0, -1.0], 0.2: [-0.3, 0.0, 0.25, 0.3, 0.25, 0.3, -1.0, -1.0], 0.3: [0.2, 0.0, 0.4, -0.6, 0.4, -0.6, 0.4, 0.4], 0.4: [-0.2, 0.0, -0.1, 0.5, -0.1, 0.5, 0.5, 0.5], 0.45: [-0.5, 0.0, -0.1, 0.5, -0.1, 0.5, 0.5, 0.5], 0.6: [-0.5, 0.0, -0.1, 0.3, -0.1, 0.3, 0.5, 0.5], 0.8: [-1.0, 0.0, -0.4, -0.6, -0.4, -0.6, 1.0, 1.0]}
         
         #pusch sprint v1
-        #self.action_timetable = {0.0: [-0.5, 0.0, -0.2, 0.4, -0.2, 0.4, -0.5, -0.5], 0.2: [-0.5, 0.0, 0.5, -0.4, 0.5, -0.4, 1.0, 1.0], 0.45: [1.0, 0.0, 0.5, 0.6, 0.5, 0.6, 0.0, 0.0], 0.6: [1.0, 0.0, -0.2, 0.6, -0.2, 0.6, -0.5, -0.5], 0.7: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+        self.action_timetable = {0.0: [-0.5, 0.0, -0.2, 0.4, -0.2, 0.4, -0.5, -0.5], 0.2: [-0.5, 0.0, 0.5, -0.4, 0.5, -0.4, 1.0, 1.0], 0.45: [1.0, 0.0, 0.5, 0.6, 0.5, 0.6, 0.0, 0.0], 0.6: [1.0, 0.0, -0.2, 0.6, -0.2, 0.6, -0.5, -0.5], 0.7: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
 
         #sitting
         #self.action_timetable = {0:  [-0.3, 0,   -0.5, 0.3,  -0.5, 0.3,    0, 0]}
 
         #big jumps
-        self.action_timetable = {0.0: [0.5, 0.0, -0.2, -0.3, -0.2, -0.3, 0.0, 0.0], 0.25: [0.4, 0.0, -0.2, 0.2, -0.2, 0.2, 0.0, 0.0], 0.5: [0.1, 0.0, -0.8, -0.9, -0.8, -0.9, -0.5, -0.5], 0.75: [1.0, 0.0, 0.1, 0.5, 0.1, 0.5, 0.0, 0.0]}
+        #self.action_timetable = {0.0: [0.5, 0.0, -0.2, -0.3, -0.2, -0.3, 0.0, 0.0], 0.25: [0.4, 0.0, -0.2, 0.2, -0.2, 0.2, 0.0, 0.0], 0.5: [0.1, 0.0, -0.8, -0.9, -0.8, -0.9, -0.5, -0.5], 0.75: [1.0, 0.0, 0.1, 0.5, 0.1, 0.5, 0.0, 0.0]}
 
-
+        #Sim Jumps
+        #self.action_timetable = {0.0: [0.8, 0.0, -0.4, 0.2, -0.4, 0.2, 0.0, 0.0], 0.2: [0.1, 0.0, -0.4, 0.5, -0.4, 0.5, -0.7, -0.7], 0.35: [0.1, 0.0, -0.5, -0.2, -0.5, -0.2, -0.7, -0.7], 0.657: [1.0, 0.0, -0.1, 0.5, -0.1, 0.5, 0.0, 0.0]}
 
     def think_and_respond(self, obs_, state, done, current_time=0):
         # Define the action based on the time table
