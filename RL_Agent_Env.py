@@ -241,7 +241,7 @@ class RL_Env(Env):
                 terminated = True
             elif self.simulation.rabbit.check_delicate_self_collision() and self.n_steps > 20:
                 terminated = True
-            elif self.observation_type_solo == "User_command" and self.User_command[0] >= 0.2:
+            elif "User_command" in self.observation_type_solo and self.User_command[0] >= 0.5:
                 terminated = True
             else:
                 terminated = False
@@ -254,7 +254,7 @@ class RL_Env(Env):
     def check_truncated(self):
         """Check if the episode was truncated. That means when the limit of maximal steps in a episode is reached."""
         if self.Horizon_Length:
-            if hasattr(self.expert_trajectory, "trajectory_time") and self.n_steps*self.simulation_Timestep >= self.expert_trajectory.trajectory_time[-1]:
+            if hasattr(self.expert_trajectory, "trajectory_time") and self.n_steps*self.simulation_Timestep >= self.expert_trajectory.trajectory_times[-1]:
                 return True
             elif not hasattr(self.expert_trajectory, "trajectory_time") and self.n_steps*self.simulation_Timestep >= 10:
                 return True
@@ -284,7 +284,7 @@ class RL_Env(Env):
 
         #print("stacked_obs", len(observation))
          # Append the new observation to the stack
-        if self.n_steps % int(self.obs_time_space/self.n_stack/self.simulation_Timestep) == 0:
+        if self.n_steps % int(self.obs_time_space/(self.n_stack*self.simulation_Timestep)) == 0:
             #print("New Observation", self.n_steps)
             self.stacked_frames.append(observation)
         else:
@@ -441,6 +441,7 @@ class PhaseGenerator:
 if __name__ == "__main__":
     env_param_kwargs = {
         "ModelType": "SAC",
+        "render_mode": "human",
         "RobotType": "Rabbit_v3",
         "rewards_type": ["Disney_Imitation"],
         "observation_type_stacked": ["head_orientation", "joint_torques"],
@@ -450,7 +451,7 @@ if __name__ == "__main__":
         "simulation_Timestep": 0.25,
         "terrain_type": "flat",
         "recorded_movement_file_path_dic": {
-                                             r"Bewegung2": 5,
+                                             r"Bewegung1": 5,
                                              },
     }
     env = RL_Env(**env_param_kwargs)
@@ -463,7 +464,7 @@ if __name__ == "__main__":
     for _ in range(1000):
         action = env.action_space.sample()
         obs, rew, done, trunc, info = env.step(action)
-        print(obs, obs.shape)
+        done = done or trunc
         if obs.shape[0] != env.observation_size_stacked* env.n_stack+env.observation_size_solo:
             print("Error")
             break

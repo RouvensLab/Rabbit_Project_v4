@@ -16,7 +16,7 @@ class TrajectoryRecorder:
         
         """
         self.trajectory = []
-        self.trajectory_time = []
+        self.trajectory_times = []
         self.data_structure = data_structure
         self.main_dir = path
         self.trajectory_name = name
@@ -43,12 +43,12 @@ class TrajectoryRecorder:
             data = json.load(f)
             self.data_structure = data["data_structure"]
             self.trajectory = data["trajectory"]
-            self.trajectory_time = data["time"]
+            self.trajectory_times = data["time"]
 
     def get_keys(self):
         return self.data_structure
     def get_times(self):
-        return self.trajectory_time
+        return self.trajectory_times
     def get_values(self):
         return self.trajectory
     
@@ -81,27 +81,27 @@ class TrajectoryRecorder:
         print(f"Add Data {data}")
         #convert data to a json serializable format
         self.trajectory.append(self.convert_data_to_json_format(data))
-        self.trajectory_time.append(time)
+        self.trajectory_times.append(time)
 
     def get_near_data(self, time):
         """Get the data that is closest to the given time"""
-        if len(self.trajectory_time) == 0:
+        if len(self.trajectory_times) == 0:
             return self.trajectory[0]
         #get the index of the closest time
-        index = min(range(len(self.trajectory_time)), key=lambda i: abs(self.trajectory_time[i]-time))
+        index = min(range(len(self.trajectory_times)), key=lambda i: abs(self.trajectory_times[i]-time))
         return self.trajectory[index]
 
     def save_trajectory(self):
         #print(f"Save Trajectory {self.trajectory_name}")
         #print(self.trajectory)
         with open(self.trajectory_path, "w") as f:
-            json.dump({"data_structure": self.data_structure, "trajectory": self.trajectory, "time": self.trajectory_time}, f)
+            json.dump({"data_structure": self.data_structure, "trajectory": self.trajectory, "time": self.trajectory_times}, f)
 
     def get_trajectory_infos(self):
         #steps
         steps = len(self.trajectory)
         #time
-        time = self.trajectory_time[-1]
+        time = self.trajectory_times[-1]
         return steps, time
     
 

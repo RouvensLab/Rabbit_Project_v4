@@ -85,8 +85,11 @@ def get_measuredRabbit(rabbit_type = Rabbit_real,
                 self.last_send_time = current_time
                 self.send_data_to_gui([current_time, self.getBodyData_func(), self.getServoData_func()])
 
-                if self.trajectory_recorder is not None:
+                if self.is_recording():
                     self.trajectory_recorder.add_data(self.getTrajectoryData_func(), current_time)
+        
+        def is_recording(self) -> bool:
+            return self.trajectory_recorder is not None
 
 
         def start_recording_trajectory(self, trajectory_name):
@@ -145,7 +148,7 @@ class PlotterWidget(QWidget):
 
         self.main_layout = QVBoxLayout()
 
-        self.TrajRecorder = Recorder()
+        self.TrajRecorder = RecorderWidget()
         self.main_layout.addWidget(self.TrajRecorder)
         self.ServoCheckboxes = ServoCheckboxesWidget(self.servo_labels, self.toggle_servo_visibility)
         self.main_layout.addWidget(self.ServoCheckboxes)
@@ -347,7 +350,7 @@ class Connection:
         self.rabbit = rabbit
         self.rabbit.create_seperate_Window()
 
-class Recorder(QToolBar):
+class RecorderWidget(QToolBar):
     start_recording_signal = Signal()
     stop_recording_signal = Signal()
     def __init__(self):

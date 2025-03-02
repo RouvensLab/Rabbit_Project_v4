@@ -17,7 +17,7 @@ class FlashTrajectoryDeck:
         start_trajectory (str, optional): A specific trajectory to start with.
     """
 
-    def __init__(self, trajectory_list, start_trajectory=None):
+    def __init__(self, trajectory_dic:dict, start_trajectory:str=None):
         """
         Initializes the trajectory deck.
 
@@ -25,13 +25,13 @@ class FlashTrajectoryDeck:
             trajectory_list (dict): Dictionary {trajectory_name: difficulty (1-5)}.
             start_trajectory (str, optional): A specific trajectory to start with.
         """
-        self.trajectory_list = trajectory_list  # { "path1": 3, "path2": 5, ... }
-        self.trajectory_counts = {t: 0 for t in trajectory_list}  # Tracks how often each trajectory is shown
-        self.trajectory_feedback = {t: 1.0 for t in trajectory_list}  # Tracks feedback (higher = better performance)
+        self.trajectory_dic = trajectory_dic  # { "path1": 3, "path2": 5, ... }
+        self.trajectory_counts = {t: 0 for t in trajectory_dic}  # Tracks how often each trajectory is shown
+        self.trajectory_feedback = {t: 1.0 for t in trajectory_dic}  # Tracks feedback (higher = better performance)
         self.trajectory_queue = []  # Priority queue for selecting trajectories
 
         # Initialize priority queue with difficulty-based weighting
-        for trajectory, difficulty in trajectory_list.items():
+        for trajectory, difficulty in trajectory_dic.items():
             weighted_priority = self.calculate_priority(0, difficulty, 1.0)
             heapq.heappush(self.trajectory_queue, (weighted_priority, trajectory))
 
@@ -76,17 +76,13 @@ class FlashTrajectoryDeck:
             str: Selected trajectory path.
         """
 
-        # If it's the first call and a start trajectory is defined
-        if self.first_call and self.start_trajectory:
-            self.first_call = False
-            return self.start_trajectory
+        if not self.trajectory_queue:
+            print("Warning: No more trajectories left in the queue!")
+            #chose a random trajectory
+            return random.choice(list(self.trajectory_dic.keys()))
 
-        # Get the trajectory with the lowest priority (most urgent for review)
         _, trajectory = heapq.heappop(self.trajectory_queue)
-
-        # Update trajectory usage count
         self.trajectory_counts[trajectory] += 1
-
         return trajectory
 
     def update_feedbacks(self):
@@ -110,7 +106,7 @@ class FlashTrajectoryDeck:
         self.trajectory_feedback[self.last_trajectory] = feedback_factor
 
         # Compute new priority with difficulty weighting
-        difficulty = self.trajectory_list[self.last_trajectory]
+        difficulty = self.trajectory_dic[self.last_trajectory]
         new_priority = self.calculate_priority(self.trajectory_counts[self.last_trajectory], difficulty, feedback_factor)
 
         # Reinsert into the queue with updated priority

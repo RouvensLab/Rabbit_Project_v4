@@ -488,7 +488,12 @@ class ActionTimetableEditor(QMainWindow):
         #update the timetable
         self.manual_exp.action_timetable = self.table.get_dict()
 
-    def reset_simulation(self):        
+    def reset_simulation(self):    
+        #check if the simulation is recording
+        if self.RlEnv.simulation.rabbit.is_recording():
+            self.RabbitMesure_widget.TrajRecorder.stop_recording_trajectory()
+
+
         try:
             if self.RlEnv and self.isControled_dropdown.currentText() == "Only Simulation":
                 return self.RlEnv.reset()
@@ -593,6 +598,7 @@ class ActionTimetableEditor(QMainWindow):
         if self.RlRobot:
             self.RlRobot.close()
             self.RlRobot = None
+
 
 
     def start_thread(self):

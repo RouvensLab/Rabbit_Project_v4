@@ -71,12 +71,12 @@ if __name__ == "__main__":
         "rewards_type": ["Disney_Imitation"],
         "observation_type_stacked": ["head_orientation", "joint_torques"],
         "observation_type_solo": ["phase_signal", "last_action", "User_command"],
-        "Horizon_Length": False,
-        "obs_time_space": 2,
-        "simulation_Timestep": 0.25,
+        "Horizon_Length": True,
+        "obs_time_space": 1.5,
+        "simulation_Timestep": 0.2,
         "terrain_type": "flat",
         "recorded_movement_file_path_dic": {
-                                             r"Bewegung2": 5,
+                                             r"Bewegung1": 5,
                                              },
     }
 
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     if not show_last_results:
 
         # Make multiprocess env
-        num_cpu = 2 # Adjust the number of CPUs based on your machine
+        num_cpu = 30 # Adjust the number of CPUs based on your machine
         envs = SubprocVecEnv([make_env(i, env_param_kwargs=env_param_kwargs) for i in range(num_cpu)])
 
         #creates a documentation of the model hyperparameter, the environements parameter and other information concearned to the training, in the Model directory.
@@ -147,7 +147,7 @@ if __name__ == "__main__":
         #     #save the expert trajectories
         #     exp_rollouts = serialize.load(tr_model_replay_buffer_dir)
         #     print("Rollouts are added to the replay buffer")
-
+        envs.reset()
         if alg_name == "SAC":
             from stable_baselines3 import SAC
             # #load pre-trained PPO policy
