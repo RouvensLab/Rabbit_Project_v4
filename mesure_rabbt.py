@@ -20,7 +20,7 @@ from Objects.Rabbit_v3 import Rabbit
 #real robot
 from Real_robot.real_rabbit import Rabbit_real
 
-def get_measuredRabbit(rabbit_type = Rabbit_real, 
+def get_measuredRabbit(rabbit_type,
                        state_types_body=["base_position", "head_orientation", "head_linear_acceleration" ], 
                        state_types_servos=["joint_angles", "joint_velocities", "joint_torques"], 
                        trajectory_data_structure= ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "joint_action_rate", "joint_action_acceleration"]

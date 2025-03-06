@@ -79,9 +79,13 @@ class ExtendedTableWidget(QTableWidget):
                     self.item(other_row, col).setBackground(Qt.white)
 
 class EnvParameterEditor(QWidget):
-    def __init__(self, env_param_kwargs, restart_callback):
+    def __init__(self, env_param_kwargs, fixed_env_params, restart_callback):
         super().__init__()
+        self.fixed_env_params = fixed_env_params
+        self.env_param_kwargs = self.overwrite_with_fixed_env_params(env_param_kwargs)
+
         self.initUI(env_param_kwargs, restart_callback)
+
     def initUI(self, env_param_kwargs, restart_callback):
         self.restart_callback = restart_callback
         
@@ -107,6 +111,16 @@ class EnvParameterEditor(QWidget):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
+    def overwrite_with_fixed_env_params(self, env_param_kwargs):
+        #remove all same keys of fix_env_params from the env_param_kwargs
+        for key in self.fixed_env_params.keys():
+            if key in env_param_kwargs:
+                env_param_kwargs.pop(key)
+                #add the fixed env params to the env_param_kwargs
+        #env_param_kwargs.update(self.fixed_env_params)
+        return env_param_kwargs
+
+
     def load_env_parameters(self, env_param_kwargs):
         # Load the environment parameters into the table
         self.table.setRowCount(len(env_param_kwargs))
@@ -125,7 +139,7 @@ class EnvParameterEditor(QWidget):
             # Try to convert the parameter value to a float or int if possible or as a json string
             # print(param_value)
             env_param_kwargs[param_name] = ast.literal_eval(param_value)
-        print(env_param_kwargs)
+        print("Env_Parameters:   ", env_param_kwargs)
         return env_param_kwargs
 
     def open_Env_param_from_file(self):
@@ -147,7 +161,9 @@ class EnvParameterEditor(QWidget):
                 QMessageBox.warning(self, "Error", "Could not load the environment parameters from the file!")
                 return
 
-            self.load_env_parameters(env_param_kwargs)
+            self.env_param_kwargs = self.overwrite_with_fixed_env_params(env_param_kwargs)
+
+            self.load_env_parameters(self.env_param_kwargs)
             QMessageBox.information(self, "Parameters Loaded", "Environment parameters loaded successfully!")
         else:
             QMessageBox.warning(self, "Parameters Not Loaded", "No parameters loaded!")
@@ -168,7 +184,7 @@ class ActionTimetableEditor(QMainWindow):
         # Restore geometry and state
         self.restore_geometry()
 
-
+        #get the default parameters for the RLEnv as a dictionary
 
         self.def_RlEnv_param_kwargs = {
         "ModelType": "SAC",
@@ -176,9 +192,10 @@ class ActionTimetableEditor(QMainWindow):
         "observation_type_stacked": [],
         "observation_type_solo": ["phase_signal"],
         "terrain_type": "flat",
-        "Horizon_Length":True ,
+        "Horizon_Length":True,
         "recorded_movement_file_path_dic": {"PushSprint_v1": 5}, 
-        "restriction_2D": False
+        "restriction_2D": False,
+        "simulation_Timestep": 0.1
     }
         self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
         self.RlEnv_startup_parms = {"render_mode": "fast", "real_robot": False, "gui": True, "RobotType":"Rabbit_v3_mesured"}
@@ -195,13 +212,13 @@ class ActionTimetableEditor(QMainWindow):
         # Create the Real Robot
         self.RLRobot_param_kwargs = {
             "ModelType": "SAC",
-            "RobotType": "Rabbit_mesured",
             "observation_type_stacked": [],
             "observation_type_solo": ["phase_signal"],
             "simulation_Timestep": 0.1,
             "obs_time_space": 1,
+            "simulation_Timestep": 0.1
         }
-        self.RLRobot_starup_parms = {"render_mode": "fast", "gui": True}
+        self.RLRobot_starup_parms = {"render_mode": "fast", "gui": True, "RobotType": "Rabbit_mesured"}
         self.RlRobot = None
         self._init_RlRobot()
 
@@ -213,7 +230,8 @@ class ActionTimetableEditor(QMainWindow):
         try:
             if hasattr(self, 'RlEnv') and self.RlEnv is not None:
                 self.RlEnv.close()
-                
+            #time steps for every action
+            self.time_step = self.RlEnv_param_kwargs["simulation_Timestep"]
             #from RL_Agent_Env import RL_Env
             self.RlEnv = RL_Env(**self.RlEnv_startup_parms, **self.RlEnv_param_kwargs)
             self.RabbitMesure_widget = self.RlEnv.simulation.rabbit.create_GuiWidget()
@@ -241,7 +259,9 @@ class ActionTimetableEditor(QMainWindow):
         try:
             if hasattr(self, 'RlRobot') and self.RlRobot is not None:
                 self.RlRobot.close()
-                
+            #time steps for every action
+            self.time_step = self.RLRobot_param_kwargs["simulation_Timestep"]
+
             self.RlRobot = RL_Robot(**self.RLRobot_starup_parms, **self.RLRobot_param_kwargs)
             self.RealRabbitMesure_widget = self.RlRobot.rabbit.create_GuiWidget()
             self.RlRobot.reset()
@@ -552,13 +572,13 @@ class ActionTimetableEditor(QMainWindow):
             
         elif self.isControled_dropdown.currentText() == "Simulation_Imitation":
             self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
+            
             self._init_RlEnv() and self._init_RlRobot()
             
         elif self.isControled_dropdown.currentText() == "Only Real Robot":
             if hasattr(self, 'RlEnv'):
                 self.RlEnv = None
             self._init_RlRobot()
-
         self.start_thread()
 
     def open_RlEnv(self, env_param_kwargs):
@@ -607,12 +627,18 @@ class ActionTimetableEditor(QMainWindow):
         print("Threat started!")
 
 
+    def restart_Env_with_new_param(self, env_param_kwargs):
+        self.cleanup_simulation()
+        self.RlEnv_param_kwargs = env_param_kwargs
+        self._init_RlEnv()
+        self.env_pause = True
+        self.start_thread()
         
 
     
     def open_Env_param(self):
         #open the environment parameter editor
-        self.env_param_editor = EnvParameterEditor(self.RlEnv_param_kwargs, lambda x: self.cleanup_simulation() and self.open_RlEnv(x) and self.start_thread())
+        self.env_param_editor = EnvParameterEditor(self.RlEnv_param_kwargs, self.RlEnv_startup_parms, lambda x: self.restart_Env_with_new_param(x))
         self.env_param_editor.setWindowTitle("Environment Parameter Editor")
         self.env_param_editor.resize(600, 400)
         self.env_param_editor.show()
@@ -694,7 +720,7 @@ class ActionTimetableEditor(QMainWindow):
                             self.no_error = False
                             print(f"Error in environment step: {e}")
                         
-                        self.IntTimer.wait_for_step((1+self.speed_slider.value())*0.1)
+                        self.IntTimer.wait_for_step((1+self.speed_slider.value())*self.time_step)
                     else:
                         time.sleep(0.5)
 
@@ -781,10 +807,14 @@ class ManualExpert:
         #self.action_timetable = {0:  [-0.3, 0,   -0.5, 0.3,  -0.5, 0.3,    0, 0]}
 
         #big jumps
-        self.action_timetable = {0.0: [0.5, 0.0, -0.2, -0.3, -0.2, -0.3, 0.0, 0.0], 0.25: [0.4, 0.0, -0.2, 0.2, -0.2, 0.2, 0.0, 0.0], 0.5: [0.1, 0.0, -0.8, -0.9, -0.8, -0.9, -0.5, -0.5], 0.75: [1.0, 0.0, 0.1, 0.5, 0.1, 0.5, 0.0, 0.0]}
-
+        # self.action_timetable = {0.0: [0.5, 0.0, -0.2, -0.3, -0.2, -0.3, 0.0, 0.0], 0.25: [0.4, 0.0, -0.2, 0.2, -0.2, 0.2, 0.0, 0.0], 0.5: [0.1, 0.0, -0.8, -0.9, -0.8, -0.9, -0.5, -0.5], 0.75: [1.0, 0.0, 0.1, 0.5, 0.1, 0.5, 0.0, 0.0]}
+        #fast jump Sim
+        self.action_timetable = {0.0: [0.9, 0.0, -0.3, 0.4, -0.3, 0.4, 0.0, 0.0], 0.25: [0.7, 0.0, -0.5, 0.3, -0.5, 0.3, 0.0, 0.0], 0.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 0.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
         #Sim Jumps
         #self.action_timetable = {0.0: [0.8, 0.0, -0.4, 0.2, -0.4, 0.2, 0.0, 0.0], 0.2: [0.1, 0.0, -0.4, 0.5, -0.4, 0.5, -0.7, -0.7], 0.35: [0.1, 0.0, -0.5, -0.2, -0.5, -0.2, -0.7, -0.7], 0.657: [1.0, 0.0, -0.1, 0.5, -0.1, 0.5, 0.0, 0.0]}
+        #slow jumps
+        #self.action_timetable = {0.0: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, 0.0, 0.0], 1.0: [0.5, 0.0, -0.3, 0.4, -0.3, 0.4, -0.5, -0.5], 1.25: [0.1, 0.0, -0.5, 0.3, -0.5, 0.3, -0.5, -0.5], 1.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 1.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
+
 
     def think_and_respond(self, obs_, state, done, current_time=0):
         # Define the action based on the time table

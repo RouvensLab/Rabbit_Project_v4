@@ -1,151 +1,126 @@
 import random
 import heapq
+from collections import defaultdict
 
 class FlashTrajectoryDeck:
     """
-    Flashcard-style trajectory generator using spaced repetition, user feedback, and difficulty-based scheduling.
-
+    Flashcard-style trajectory generator focusing on adaptive learning.
+    
     Features:
-    - Spaced repetition: Frequently used trajectories appear less often.
-    - Adaptive learning: Poorly imitated trajectories appear more often.
-    - Difficulty-based scheduling: Harder trajectories appear more often.
-    - Priority queue scheduling: Lower score = higher priority.
-    - Allows setting a start trajectory.
+    - Poorly performing trajectories appear more often.
+    - Every fourth selection is fully randomized.
+    - A trajectory cannot be selected more than `max_revisions` times before another is prioritized.
 
     Args:
-        trajectory_list (dict): Dictionary with trajectory names as keys and difficulty (1-5) as values.
-        start_trajectory (str, optional): A specific trajectory to start with.
+        trajectory_dic (dict): Dictionary of trajectories with difficulty levels (1-5).
+        max_revisions (int, optional): Maximum times a trajectory can be chosen before forcing another. Default is 10.
+        random_interval (int, optional): Every `random_interval` turns, a random trajectory is selected. Default is 4.
     """
 
-    def __init__(self, trajectory_dic:dict, start_trajectory:str=None):
-        """
-        Initializes the trajectory deck.
-
-        Args:
-            trajectory_list (dict): Dictionary {trajectory_name: difficulty (1-5)}.
-            start_trajectory (str, optional): A specific trajectory to start with.
-        """
+    def __init__(self, trajectory_dic: dict, max_revisions: int = 10, random_interval: int = 4):
         self.trajectory_dic = trajectory_dic  # { "path1": 3, "path2": 5, ... }
-        self.trajectory_counts = {t: 0 for t in trajectory_dic}  # Tracks how often each trajectory is shown
-        self.trajectory_feedback = {t: 1.0 for t in trajectory_dic}  # Tracks feedback (higher = better performance)
-        self.trajectory_queue = []  # Priority queue for selecting trajectories
+        self.trajectory_counts = defaultdict(int)  # Counts how often a trajectory has been shown
+        self.trajectory_feedback = {t: 1.0 for t in trajectory_dic}  # Feedback score (1 = neutral start)
+        self.trajectory_queue = []  # Priority queue for scheduling
+        self.max_revisions = max_revisions
+        self.random_interval = random_interval
+        self.call_count = 0  # Track the number of calls for randomization
 
-        # Initialize priority queue with difficulty-based weighting
+        #for one episode feedback
+        self.episode_feedback = []
+
+        # Initialize priority queue
         for trajectory, difficulty in trajectory_dic.items():
-            weighted_priority = self.calculate_priority(0, difficulty, 1.0)
-            heapq.heappush(self.trajectory_queue, (weighted_priority, trajectory))
+            priority = self.calculate_priority(0, difficulty, 1.0)
+            heapq.heappush(self.trajectory_queue, (priority, trajectory))
 
-        # Set the starting trajectory, if provided
-        self.start_trajectory = start_trajectory
-        self.first_call = True  # Ensures start trajectory is used first
-
-        self.feedback_col = 0
-        self.feedback_step = 0
-        self.last_trajectory = None
-
-    def calculate_priority(self, count, difficulty, feedback_factor):
+    def calculate_priority(self, count: int, difficulty: int, feedback_factor: float) -> float:
         """
         Computes the priority score for a trajectory.
-
-        Lower scores = higher priority.
-
-        Args:
-            count (int): Number of times trajectory has been shown.
-            difficulty (int): Difficulty level (1-5).
-            feedback_factor (float): Performance feedback factor.
-
-        Returns:
-            float: Computed priority score.
+        Lower scores mean higher priority.
         """
-        # Base priority is determined by the count
         base_priority = count
-
-        # More difficult trajectories have a base priority reduction (shown more often)
-        difficulty_weight = 1.0 / difficulty  # Harder trajectories get lower priority scores (higher frequency)
-
-        # Feedback factor modifies priority (higher feedback = more delay)
-        adjusted_priority = (base_priority + 1) * difficulty_weight * feedback_factor  
-
+        difficulty_weight = 1.0 / difficulty  # Harder trajectories appear more often
+        adjusted_priority = (base_priority + 1) * difficulty_weight / feedback_factor
         return adjusted_priority
 
-    def get_trajectory_path(self):
+    def get_trajectory_path(self) -> str:
         """
-        Returns the next trajectory based on spaced repetition and difficulty.
-
-        Returns:
-            str: Selected trajectory path.
+        Returns the next trajectory based on adaptive scheduling.
         """
+        self.call_count += 1
 
-        if not self.trajectory_queue:
-            print("Warning: No more trajectories left in the queue!")
-            #chose a random trajectory
+        # Random selection every `random_interval` calls
+        if self.call_count % self.random_interval == 0:
             return random.choice(list(self.trajectory_dic.keys()))
 
-        _, trajectory = heapq.heappop(self.trajectory_queue)
-        self.trajectory_counts[trajectory] += 1
-        return trajectory
+        # Retrieve the best candidate from the queue
+        while self.trajectory_queue:
+            priority, candidate = heapq.heappop(self.trajectory_queue)
 
-    def update_feedbacks(self):
-        """
-        Receives user feedback on how well the trajectory was imitated.
+            # Enforce max revisions rule
+            if self.trajectory_counts[candidate] >= self.max_revisions:
+                continue  # Skip this candidate and try another
 
-        Args:
-            trajectory (str): The trajectory that was just executed.
-            score (int): Imitation score (1 = poor, 5 = perfect).
-        """
-        if self.last_trajectory not in self.trajectory_counts:
-            print(f"Warning: {self.last_trajectory} is not in the trajectory list.")
-            return
-        # Convert score to a weight factor (higher score = more delay)
-        # Example: Score 1 (bad) → factor 0.5 (comes back sooner)
-        #          Score 5 (good) → factor 2.0 (delays next appearance)
-        feedback_factor_map = {1: 0.5, 2: 0.75, 3: 1.0, 4: 1.5, 5: 2.0}
-        feedback_factor = feedback_factor_map.get(int(self.feedback_col/self.feedback_step), 1.0)
+            # Select this candidate
+            self.trajectory_counts[candidate] += 1
+            return candidate
 
-        # Update trajectory feedback score
-        self.trajectory_feedback[self.last_trajectory] = feedback_factor
-
-        # Compute new priority with difficulty weighting
-        difficulty = self.trajectory_dic[self.last_trajectory]
-        new_priority = self.calculate_priority(self.trajectory_counts[self.last_trajectory], difficulty, feedback_factor)
-
-        # Reinsert into the queue with updated priority
-        heapq.heappush(self.trajectory_queue, (new_priority, self.last_trajectory))
+        # If queue is empty, pick a random trajectory
+        return random.choice(list(self.trajectory_dic.keys()))
     
-    def give_feedback(self, trajectory, score):
+    def collect_episode_feedback(self, score_percent: float):
         """
-        Receives user feedback on how well the trajectory was imitated.
-
-        Args:
-            trajectory (str): The trajectory that was just executed.
-            score (int): Imitation score (1 = poor, 5 = perfect).
+        Updates feedback for a trajectory (score in range 0.0 - 1.0).
         """
+        # Avoid division by zero (ensure feedback is in range)
+        score_percent = max(0.01, min(1.0, score_percent))
+        self.episode_feedback.append(score_percent)
 
-        if trajectory not in self.trajectory_counts:
-            print(f"Warning: {trajectory} is not in the trajectory list.")
+    def return_episode_feedback(self):
+        """
+        Returns the feedback for the episode.
+        """
+        num_steps = len(self.episode_feedback)
+        if num_steps != 0:
+            avg_score = sum(self.episode_feedback) / num_steps
+            self.episode_feedback = []
+            return avg_score
+        return 0.0
+
+    def give_feedback(self, trajectory: str, score_percent: float):
+        """
+        Updates feedback for a trajectory (score in range 0.0 - 1.0).
+        """
+        if trajectory not in self.trajectory_dic:
+            print(f"Warning: {trajectory} not found.")
             return
 
-        self.feedback_col += score
-        self.feedback_step += 1
-        self.last_trajectory = trajectory
+        # Avoid division by zero (ensure feedback is in range)
+        score_percent = max(0.01, min(1.0, score_percent))
+
+        # Update feedback factor
+        self.trajectory_feedback[trajectory] = score_percent
+
+        # Reinsert with updated priority
+        difficulty = self.trajectory_dic[trajectory]
+        new_priority = self.calculate_priority(self.trajectory_counts[trajectory], difficulty, score_percent)
+        heapq.heappush(self.trajectory_queue, (new_priority, trajectory))
 
 
+# Example usage
 if __name__ == "__main__":
-    # Example Usage:
     trajectory_list = {
         "path1": 3,  # Medium difficulty
         "path2": 5,  # Hard
         "path3": 2,  # Easy
         "path4": 4   # High-medium difficulty
     }
-    deck = FlashTrajectoryDeck(trajectory_list, start_trajectory="path3")
 
-    # Get and evaluate trajectories
-    for _ in range(100):
+    deck = FlashTrajectoryDeck(trajectory_list)
+
+    for _ in range(20):
         traj = deck.get_trajectory_path()
         print(f"Next trajectory: {traj}")
-
-        # Simulating user feedback (random scores for testing)
-        score = int(input("Enter score (1-5): "))
-        print(f"User feedback for {traj}: {score}")
+        score = float(input("Enter score (0-1): "))  # Get user feedback
         deck.give_feedback(traj, score)

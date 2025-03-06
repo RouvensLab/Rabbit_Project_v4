@@ -8,6 +8,8 @@ import pybullet_data
 import time
 import numpy as np
 
+from tools.TimeInterval import TimeInterval
+
 class Simulation:
     def __init__(self,
                  gui=True,
@@ -20,6 +22,10 @@ class Simulation:
         self.GUI = gui
         self.connection_id = None
         self.initialize_physics_server()
+
+        self.time_interval = TimeInterval(time_per_step=simulation_Timestep)
+
+
         
         #the ground of the simulation needs to be created first. Afterwards the rabbit can be created
         self.ground = Terrain(terrain_type)
@@ -124,11 +130,7 @@ class Simulation:
             p.stepSimulation()
         
         if self.simulationSpeed == "human":
-            if not hasattr(self, "last_time"):
-                self.last_time = time.time()
-            if self.simulation_Timestep-(time.time()-self.last_time) > 0:
-                time.sleep(self.simulation_Timestep-(time.time()-self.last_time))
-            self.last_time = time.time()
+            self.time_interval.wait_for_step(self.simulation_Timestep)
 
     def close(self):
         if self.connection_id is not None:

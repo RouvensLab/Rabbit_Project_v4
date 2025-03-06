@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
 
     alg_name = "SAC"
-    ModellName = "Disney_Imitation_v1"
+    ModellName = "Disney_Imitation_v4"
     main_dir = r"Models\\" + alg_name + ModellName
     models_dir = os.path.join(main_dir, "models")
     logdir = models_dir+"\\logs"
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     if not os.path.exists(logdir):
         os.makedirs(logdir)
     
-    total_timesteps = 30_000_000  # Increase total training steps
+    total_timesteps = 40_000_000  # Increase total training steps
 
     env_param_kwargs = {
         "ModelType": alg_name,
@@ -76,17 +76,25 @@ if __name__ == "__main__":
         "simulation_Timestep": 0.2,
         "terrain_type": "flat",
         "recorded_movement_file_path_dic": {
-                                             r"Bewegung1": 5,
+                                                r"Bewegung1": 3,
+                                                r"Bewegung2": 4,
+                                                r"Bewegung3": 4,
+                                                r"Bewegung4": 4,
+                                                r"CurveLeft1": 5,
+                                                r"CurveRight1": 5,
+                                                r"Standing1": 1,
+                                                r"Standing2": 1,
+                                                r"Standing3": 1,
                                              },
     }
 
     if alg_name == "SAC":
         hyper_params = {
-            "learning_rate": 4*1e-5,#2*1e-5=0.00002
+            "learning_rate": 2*1e-5,#2*1e-5=0.00002
             "batch_size": 3000,#8192*24,
             "buffer_size": 700_000,
             "policy_kwargs": dict(net_arch=dict(pi=[512, 256], qf=[512, 256])),
-            "gamma" : 0.97
+            "gamma" : 0.96
 
         }
 
@@ -131,12 +139,12 @@ if __name__ == "__main__":
         eval_env = Monitor(eval_env)  # Wrap evaluation environment with Monitor
 
         eval_callback = EvalCallback(eval_env, best_model_save_path=models_dir,
-                        log_path=logdir, eval_freq=10000,
+                        log_path=logdir, eval_freq=50000,
                         deterministic=False, render=False,
                         n_eval_episodes=5
                         )
 
-        checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=models_dir,
+        checkpoint_callback = CheckpointCallback(save_freq=50000, save_path=models_dir,
                             name_prefix='rl_model')
         # Create the custom callback
         #baby_mode_freedom_callback = BabyModeFreedomCallback()
@@ -183,7 +191,7 @@ if __name__ == "__main__":
     
     else:
         # Load the trained agent
-        model = SAC.load(models_dir + "/best_model.zip")
+        model = SAC.load(r"Models\SACDisney_Imitation_v2\models\rl_model_6000000_steps.zip")
 
         # Evaluate the agent
         env = RL_Env(render_mode="human", gui=True, **env_param_kwargs)

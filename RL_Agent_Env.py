@@ -2,6 +2,7 @@ from gymnasium import Env, spaces
 from Env import Simulation
 from tools.Trajectory import TrajectoryRecorder
 from tools.SpaceRepetition import FlashTrajectoryDeck
+from tools.Phase_Generator import PhaseGenerator
 
 import numpy as np
 import math
@@ -30,8 +31,6 @@ class RL_Env(Env):
                 restriction_2D = False,
                 
                 real_robot = False,
-
-                
                 ):
         super(RL_Env, self).__init__()
         self.ModelType = ModelType
@@ -51,7 +50,7 @@ class RL_Env(Env):
         
         self.expert_trajectory = TrajectoryRecorder()
 
-        self.simulation = Simulation(gui=gui, simulation_speed=render_mode, terrain_type = terrain_type, rabbit_type = RobotType)
+        self.simulation = Simulation(gui=gui, simulation_speed=render_mode, simulation_Timestep=simulation_Timestep, terrain_type = terrain_type, rabbit_type = RobotType)
         
         self.action_low_high = [-1, 1]
         self.observation_low_high = [-1, 1]
@@ -87,7 +86,7 @@ class RL_Env(Env):
         # Frame stacking parameters
 
         if "Disney_Imitation" in self.RewardsType:
-            self.TrajectroyDeck = FlashTrajectoryDeck(self.recorded_movement_file_path_dic)
+            self.TrajectroyDeck = FlashTrajectoryDeck(self.recorded_movement_file_path_dic, max_revisions=10, random_interval=12)
 
 
         
@@ -219,8 +218,8 @@ class RL_Env(Env):
             max_score = sum(weights.values())
             score = (tot_reward) / max_score
             #gives a score between 0 and 5 in integer
-            print("score", int(score*5))
-            self.TrajectroyDeck.give_feedback(self.expert_trajectory.trajectory_name, int(score*5))
+            print("score", score)
+            self.TrajectroyDeck.collect_episode_feedback(score)
 
 
             return tot_reward
@@ -369,7 +368,8 @@ class RL_Env(Env):
         self.n_steps = 0
 
         if "Disney_Imitation" in self.RewardsType:
-            self.TrajectroyDeck.update_feedbacks()            
+            if hasattr(self.expert_trajectory, "trajectory_name"):
+                self.TrajectroyDeck.give_feedback(self.expert_trajectory.trajectory_name, self.TrajectroyDeck.return_episode_feedback())       
             #Open the recorded movement files
             self.expert_trajectory.load_trajectory(self.TrajectroyDeck.get_trajectory_path())
             #to get the expert data_types
@@ -411,30 +411,7 @@ class RL_Env(Env):
 
 
 
-class PhaseGenerator:
-    def __init__(self, is_periodic=True, duration=1.0, dt=0.02):
-        """
-        Initialize a phase signal generator.
 
-        Args:
-            is_periodic (bool): If True, phase loops continuously (for walking).
-                                If False, phase stops at 1 (for episodic motions).
-            duration (float): Total time for one cycle.
-            dt (float): Time step per update.
-        """
-        self.phase = 0.0
-        self.dt = dt
-        self.duration = duration
-        self.is_periodic = is_periodic
-
-    def update(self):
-        """Update the phase signal."""
-        self.phase += self.dt / self.duration
-        if self.is_periodic:
-            self.phase %= 1.0  # Loop phase for walking
-        else:
-            self.phase = min(self.phase, 1.0)  # Stop at 1 for episodic motions
-        return self.phase
     
 
     
