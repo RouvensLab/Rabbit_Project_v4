@@ -1,4 +1,3 @@
-from gymnasium import Env, spaces
 from Env import Simulation
 from tools.Trajectory import TrajectoryRecorder
 from tools.SpaceRepetition import FlashTrajectoryDeck
@@ -10,93 +9,40 @@ from collections import deque
 
 import time
 
+from RL_Basis import RL_Base
 
 
-class RL_Env(Env):
+
+class RL_Env(RL_Base):
     def __init__(self,
-                ModelType="SAC",
                 RobotType="Rabbit_v3",
-                gui = True, 
-                render_mode="human",
-                rewards_type=["Disney_Imitation"], 
-                observation_type_stacked=["head_orientation", "head_linear_acceleration", "head_angular_velocity", "joint_torques"],
-                observation_type_solo=["phase_signal", "last_action", "User_command"],
-                Horizon_Length = True,
-                simulation_Timestep = 0.1,
-                obs_time_space = 1, #in seconds
-                n_stack = 5,
+                gui = True,
+                rewards_type=["Disney_Imitation"],
                 recorded_movement_file_path_dic = {"Bewegung2": 4, 
                                                     },
                 terrain_type = "random_terrain",
                 restriction_2D = False,
                 
                 real_robot = False,
+                **kwargs
                 ):
         super(RL_Env, self).__init__()
-        self.ModelType = ModelType
+        super().__init__(**kwargs)
+        
         self.RewardsType = rewards_type
-        self.observation_type_stacked = observation_type_stacked
-        self.observation_type_solo = observation_type_solo
-        self.Horizon_Length = Horizon_Length
-        self.simulation_Timestep = simulation_Timestep
-        self.obs_time_space = obs_time_space
         self.recorded_movement_file_path_dic = recorded_movement_file_path_dic
 
         self.terrain_type = terrain_type
         self.restriction_2D = restriction_2D
 
         self.gui = gui
-        self.n_steps = 0
         
         self.expert_trajectory = TrajectoryRecorder()
 
-        self.simulation = Simulation(gui=gui, simulation_speed=render_mode, simulation_Timestep=simulation_Timestep, terrain_type = terrain_type, rabbit_type = RobotType)
-        
-        self.action_low_high = [-1, 1]
-        self.observation_low_high = [-1, 1]
-
-        # Action space
-        self.action_size = self.simulation.rabbit.numMotors
-
-        observation_type_sizes = {
-            "base_position": 3,
-            "base_orientation": 3,
-            "base_linear_velocity": 3,
-            "base_angular_velocity": 3,
-            "head_orientation": 3,
-            "head_linear_acceleration": 3,
-            "head_angular_acceleration": 3,
-            "head_linear_velocity": 3,
-            "head_angular_velocity": 3,
-            "joint_angles": self.simulation.rabbit.numMotors,
-            "joint_velocities": self.simulation.rabbit.numMotors,
-            "joint_torques": self.simulation.rabbit.numMotors,
-
-            "feet_forces": 4,
-            "phase_signal": 1,
-            "last_action": self.action_size,
-            "User_command": 2,
-        }
-        self.n_stack = n_stack # Number of frames to stack
-        self.stacked_frames = deque(maxlen=self.n_stack)
-        self.obs_time_space = obs_time_space #in seconds
-        # Observation space
-        self.observation_size_stacked = sum([observation_type_sizes[obs] for obs in self.observation_type_stacked]) 
-        self.observation_size_solo = sum([observation_type_sizes[obs] for obs in self.observation_type_solo])
-        # Frame stacking parameters
+        self.simulation = Simulation(gui=gui, simulation_speed=self.render_mode, simulation_Timestep=self.simulation_Timestep, terrain_type = terrain_type, rabbit_type = RobotType)
 
         if "Disney_Imitation" in self.RewardsType:
             self.TrajectroyDeck = FlashTrajectoryDeck(self.recorded_movement_file_path_dic, max_revisions=10, random_interval=12)
-
-
-        
-
-
-        if ModelType == "SAC" or ModelType == "PPO":
-            self.action_space = spaces.Box(low=self.action_low_high[0], high=self.action_low_high[1], shape=(self.action_size,), dtype=np.float16)
-            self.observation_space = spaces.Box(low=self.observation_low_high[0], high=self.observation_low_high[1], shape=(self.observation_size_stacked*self.n_stack+self.observation_size_solo,), dtype=np.float16)
-        print(f"Using {ModelType} model\n Action space: {self.action_size}\n Observation space: {self.observation_size_stacked* self.n_stack+self.observation_size_solo}")
-
         #to get important datas
         self.infos_types = ["base_position", "base_orientation", "base_linear_velocity", "joint_torques", "component_coordinates_world", "joint_acceleration"]
         self.get_rabbit_infos = self.simulation.rabbit.create_get_informations(self.infos_types)
@@ -265,63 +211,31 @@ class RL_Env(Env):
     def get_observation(self):
         
         #Stacked observations
-        observation = np.array([])
+        stacked_obs = np.array([])
         for i, obs in enumerate(self.get_rabbit_observation()):
             if self.observation_type_stacked[i] in ["euler_array", "base_orientation", "head_orientation", "joint_angles", "head_angular_velocity",]:
                 # Flatten each part of the observation into a 1D array
                 _array = np.array(obs) / (2*math.pi)
-                observation = np.concatenate([observation, _array])
+                stacked_obs = np.concatenate([stacked_obs, _array])
             
             elif self.observation_type_stacked[i] in ["base_position", "base_linear_velocity", "base_angular_velocity", "head_linear_acceleration",  "joint_torques", "joint_velocities"]:
                 _array = np.clip(np.array(obs) / 100, -1, 1)
-                observation = np.concatenate([observation, _array])
+                stacked_obs = np.concatenate([stacked_obs, _array])
 
             else:
                 _array = np.clip(obs, -1, 1)
-                observation = np.concatenate([observation, _array])
-            #print(len(_array))
-
-        #print("stacked_obs", len(observation))
-         # Append the new observation to the stack
-        if self.n_steps % int(self.obs_time_space/(self.n_stack*self.simulation_Timestep)) == 0:
-            #print("New Observation", self.n_steps)
-            self.stacked_frames.append(observation)
-        else:
-            #just replace the last(so the one in -1 possition) observation with the new observation
-            self.stacked_frames[-1] = observation
-            #print("Replace Observation", self.ROS_Env.simulation_steps)
-        #print("stacked_frames", len(self.stacked_frames))
-        
-        # Concatenate stacked frames
-        stacked_obs = np.concatenate(self.stacked_frames, axis=None, dtype=np.float16)
-        #print("stacked_obs", len(stacked_obs))
-
+                stacked_obs = np.concatenate([stacked_obs, _array])
         
         #Single observations
         #add phase_signal
+        observation_solo = np.array([])
         if "phase_signal" in self.observation_type_solo:
-            stacked_obs = np.concatenate([stacked_obs, [self.phase_generator.update()]])
+            observation_solo = np.concatenate([observation_solo, [self.phase_generator.update()]])
         if "last_action" in self.observation_type_solo:
-            stacked_obs = np.concatenate([stacked_obs, self.current_action])
+            observation_solo = np.concatenate([observation_solo, self.current_action])
         if "User_command" in self.observation_type_solo:
-            stacked_obs = np.concatenate([stacked_obs, self.User_command])
-
-        # 
-        #check if the observation is the right size
-        if len(stacked_obs) != self.observation_size_stacked*self.n_stack+self.observation_size_solo:
-            print("Error")
-            #give all Information
-            print("stacked_obs", len(stacked_obs))
-            print("self.observation_size_stacked", self.observation_size_stacked)
-            print("self.n_stack", self.n_stack)
-            print("self.observation_size_solo", self.observation_size_solo)
-            print("self.observation_type_solo", self.observation_type_solo)
-            print("self.observation_type_stacked", self.observation_type_stacked)
-            print("self.get_rabbit_observation()", self.get_rabbit_observation())
-            print("self.get_rabbit_infos()", self.get_rabbit_infos())
-
-            raise ValueError(f"Observation size is not correct. Got {len(stacked_obs)} but expected {self.observation_size_stacked*self.n_stack+self.observation_size_solo}")
-        return stacked_obs
+            observation_solo = np.concatenate([observation_solo, self.User_command])
+        return super().get_observation(stacked_obs, observation_solo)
 
     def step(self, action):
         self.current_action = action        
@@ -353,19 +267,15 @@ class RL_Env(Env):
         terminated = self.check_terminated()
         truncated = self.check_truncated()
         info = {}
-        
-
-        self.n_steps += 1
+        super().step()
         self.last_action = self.current_action
         self.last2_action = self.last_action
-        print("reward: ", reward, "action: ", action)# ,"\n observations: ", observations)
+        #print("reward: ", reward, "action: ", action)# ,"\n observations: ", observations)
         
         return observations, reward, terminated, truncated, info
 
     def reset(self, seed=None):
-        # Reset the state of the environment to an initial state
-        self.rhythm = 0
-        self.n_steps = 0
+        super().reset()
 
         if "Disney_Imitation" in self.RewardsType:
             if hasattr(self.expert_trajectory, "trajectory_name"):
@@ -375,10 +285,6 @@ class RL_Env(Env):
             #to get the expert data_types
             self.get_rabbit_states = self.simulation.rabbit.create_get_informations(self.expert_trajectory.data_structure)
 
-        self.current_action = np.zeros(self.action_size)
-        self.last_action = np.zeros(self.action_size)
-        self.last2_action = np.zeros(self.action_size)
-
         if "phase_signal" in self.observation_type_solo:
             self.phase_generator = PhaseGenerator(is_periodic=True, duration=1.0, dt=self.simulation_Timestep)
         if "User_command" in self.observation_type_solo:
@@ -386,16 +292,13 @@ class RL_Env(Env):
 
         # Reset the state of the environment to an initial state
         self.simulation.rabbit.reset()
-        # Clear the frame stack and add the initial observation
-        self.stacked_frames.clear()
-        for _ in range(self.n_stack):
-            self.stacked_frames.append(np.zeros(self.observation_size_stacked))
+
         #get the observations
         observations = np.array(self.get_observation())
 
         # put noise on the observation
         noise_low, noise_high = -0.1, 0.1
-        observations = np.clip(observations + np.random.uniform(noise_low, noise_high, size=observations.shape), -1, 1)        
+        observations = np.clip(observations + np.random.uniform(noise_low, noise_high, size=observations.shape), -1, 1)   
         #print("reset obs",len(observations))
 
         return observations, {}

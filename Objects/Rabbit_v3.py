@@ -36,6 +36,7 @@ class Rabbit:
         self.Joints_index = [9,10,  0, 1,    15, 16, 17,   12, 13, 14,    5, 6] #this are all the motors of the rabbit that can be controlled and read out. In the preferred order. !!!!
         [14, 17, 6, 5]
         self.numMotors = 8
+        self.current_action = [0]*self.numMotors
 
         #when there are other physical properties for the motors, they can be set here
         self.MAXFORCE = 2.9  #2.9#2.941995#5#in Newton   3 N/m
@@ -73,6 +74,12 @@ class Rabbit:
 
         #reset the robot to the initial position, so that the constraints can be set
         self.reset()
+
+
+    def set_new_mass(self):
+        """Set new masses for every Bodypart (link) of the robot
+        """
+        
 
         
     def set_self_collision(self, collistionPartners = [(11, 14), (11, 13), (7, 3), (7, 4)], enable=True):
@@ -275,6 +282,8 @@ class Rabbit:
                 lambda_list.append(lambda: self.get_action_rate())
             elif "joint_acceleration"== state_type:
                 lambda_list.append(lambda: self.get_action_acceleration())
+            elif "action" == state_type:
+                lambda_list.append(lambda: self.current_action)
             
             elif "component_coordinates_world"== state_type:
                 lambda_list.append(lambda: [p.getLinkState(self._id, i)[0] for i in range(p.getNumJoints(self._id))])
@@ -393,6 +402,7 @@ class Rabbit:
         #map the servo_positions to the range of the servos
         # print("pose_positions:", pose_positions)
         # print("Motors_range:", self.Motors_range)
+        self.current_action = pose_positions
         servo_positions = self.convert_8_to_12_motors(pose_positions)
         #print("after servopositions:", servo_positions)
 

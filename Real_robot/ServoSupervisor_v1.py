@@ -401,6 +401,7 @@ class ServoSupervisor(threading.Thread):
 
         print(table)
 
+
     def run(self, send_pace=0.8):
         print("Starting thread ????")
         

@@ -68,7 +68,8 @@ class OscilloscopeReader:
                     elif channel == 'CHAN2':
                         self.channel2_data = (time_array, voltage_array)
             except:
-                print(f"Error while reading the total voltage. {channel}")
+                #print(f"Error while reading the total voltage. {channel}")
+                pass
                 
     def get_channel1_data(self):
         with self._lock:
@@ -108,8 +109,8 @@ class OscilloscopeReader:
         average_voltage = np.mean(voltage_array)
         return average_voltage
     
-    def calc_current(self, voltage, resistance=0.0248/0.33):#resistance=0.0439):
-        return voltage / resistance
+    def calc_current(self, voltage, resistance=0.1568):
+        return voltage / resistance+0.045
     
 
 

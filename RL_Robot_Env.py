@@ -1,93 +1,42 @@
-from gymnasium import Env, spaces
+from RL_Basis import RL_Base
 import numpy as np
 import math
 from collections import deque
 from tools.Phase_Generator import PhaseGenerator
 import time
 
-from Real_robot.real_rabbit import Rabbit_real
+# from Real_robot.real_rabbit import Rabbit_real
 
 
 
-class RL_Robot(Env):
+class RL_Robot(RL_Base):
     def __init__(self,
-                ModelType="SAC",
                 RobotType="Rabbit_real",
                 gui = True,
-                render_mode = "human",
-                observation_type_stacked=["head_orientation", "head_linear_acceleration", "head_angular_velocity", "joint_torques"],
-                observation_type_solo=["phase_signal", "last_action", "User_command"],
-                simulation_Timestep = 0.1,
-                obs_time_space = 1, #in seconds
-                n_stack = 5,
-
+                **kwargs
                 
                 ):
         super(RL_Robot, self).__init__()
-        self.ModelType = ModelType
-        self.observation_type_stacked = observation_type_stacked
-        self.observation_type_solo = observation_type_solo
-        self.simulation_Timestep = simulation_Timestep
-        self.obs_time_space = obs_time_space
+        super().__init__(**kwargs)
 
         self.gui = gui
-        self.render_mode = render_mode
-        self.n_steps = 0
 
         if RobotType == "Rabbit_real":
             from Real_robot.real_rabbit import Rabbit_real
-            self.rabbit = Rabbit_real()
+            self.rabbit = Rabbit_real(simulation_Timestep=self.simulation_Timestep)
         elif RobotType == "Rabbit_mesured":
             from Real_robot.real_rabbit import Rabbit_real
-            from mesure_rabbt import get_measuredRabbit 
+            from mesure_rabbt import get_measuredRabbit
             self.rabbit = get_measuredRabbit(Rabbit_real,
-                                            state_types_body=["head_orientation", "head_linear_acceleration", "head_angular_velocity", "total_current"], 
-                                            state_types_servos=["joint_currents"], 
-                                            trajectory_data_structure= ["joint_torques"]
-                                                )()
+                                            state_types_body=["head_orientation"],
+                                            state_types_servos=["joint_angles", "joint_velocities"], 
+                                            trajectory_data_structure= ["joint_angles", "joint_velocities"]
+                                                )(simulation_Timestep=self.simulation_Timestep)
             #self.rabbit.create_seperate_Window()
         else:
             raise ValueError("Unknown Robot type")
         
-        self.action_low_high = [-1, 1]
-        self.observation_low_high = [-1, 1]
-
-        # Action space
-        self.action_size = self.rabbit.numMotors
-
-        observation_type_sizes = {
-            "head_orientation": 3,
-            "head_linear_acceleration": 3,
-            "head_angular_acceleration": 3,
-            "base_position": 3,
-            "base_orientation": 3,
-            "base_linear_velocity": 3,
-            "base_angular_velocity": 3,
-            "head_linear_velocity": 3,
-            "head_angular_velocity": 3,
-            "joint_angles": self.rabbit.numMotors,
-            "joint_velocities": self.rabbit.numMotors,
-            "joint_torques": self.rabbit.numMotors,
-
-            "feet_forces": 4,
-            "phase_signal": 1,
-            "last_action": self.action_size,
-            "User_command": 2,
-        }
-        self.n_stack = n_stack  # Number of frames to stack
-        self.stacked_frames = deque(maxlen=self.n_stack)
-        self.obs_time_space = obs_time_space #in seconds
-        # Observation space
-        self.observation_size_stacked = sum([observation_type_sizes[obs] for obs in self.observation_type_stacked]) 
-        self.observation_size_solo = sum([observation_type_sizes[obs] for obs in self.observation_type_solo])
-        # Frame stacking parameters      
-
-
-        if ModelType == "SAC" or ModelType == "PPO":
-            self.action_space = spaces.Box(low=self.action_low_high[0], high=self.action_low_high[1], shape=(self.action_size,), dtype=np.float32)
-            self.observation_space = spaces.Box(low=self.observation_low_high[0], high=self.observation_low_high[1], shape=(self.observation_size_stacked*self.n_stack+self.observation_size_solo,), dtype=np.float32)
-        print(f"Using {ModelType} model\n Action space: {self.action_size}\n Observation space: {self.observation_size_stacked* self.n_stack+self.observation_size_solo}")
-
+        
         #to get the Observations
         self.get_rabbit_observation = self.rabbit.create_get_informations(self.observation_type_stacked)
 
@@ -131,51 +80,31 @@ class RL_Robot(Env):
     def get_observation(self):
         
         #Stacked observations
-        observation = np.array([])
+        stacked_obs = np.array([])
         for i, obs in enumerate(self.get_rabbit_observation()):
             if self.observation_type_stacked[i] in ["euler_array", "base_orientation", "head_orientation", "joint_angles", "head_angular_velocity",]:
                 # Flatten each part of the observation into a 1D array
                 _array = np.array(obs) / (2*math.pi)
-                observation = np.concatenate([observation, _array])
+                stacked_obs = np.concatenate([stacked_obs, _array])
             
             elif self.observation_type_stacked[i] in ["head_orientation", "head_acceleration",  "joint_torques", "joint_velocities"]:
                 _array = np.clip(np.array(obs) / 100, -1, 1)
-                observation = np.concatenate([observation, _array])
+                stacked_obs = np.concatenate([stacked_obs, _array])
 
             else:
                 _array = np.clip(obs, -1, 1)
-                observation = np.concatenate([observation, _array])
-
-        #print("stacked_obs", len(observation))
-         # Append the new observation to the stack
-        if self.n_steps % int(self.obs_time_space/self.n_stack/self.simulation_Timestep) == 0:
-            #print("New Observation", self.n_steps)
-            self.stacked_frames.append(observation)
-        else:
-            #just replace the last(so the one in -1 possition) observation with the new observation
-            self.stacked_frames[-1] = observation
-            #print("Replace Observation", self.ROS_Env.simulation_steps)
-        #print("stacked_frames", len(self.stacked_frames))
-        
-        # Concatenate stacked frames
-        stacked_obs = np.concatenate(self.stacked_frames, axis=None)
-        #print("stacked_obs", len(stacked_obs))
-
+                stacked_obs = np.concatenate([stacked_obs, _array])
         
         #Single observations
         #add phase_signal
+        observation_solo = np.array([])
         if "phase_signal" in self.observation_type_solo:
-            stacked_obs = np.concatenate([stacked_obs, [self.phase_generator.update()]])
+            observation_solo = np.concatenate([observation_solo, [self.phase_generator.update()]])
         if "last_action" in self.observation_type_solo:
-            stacked_obs = np.concatenate([stacked_obs, self.current_action])
+            observation_solo = np.concatenate([observation_solo, self.current_action])
         if "User_command" in self.observation_type_solo:
-            stacked_obs = np.concatenate([stacked_obs, self.User_command])
-
-        # 
-        #check if the observation is the right size
-        if len(stacked_obs) != self.observation_size_stacked* self.n_stack+self.observation_size_solo:
-            raise ValueError(f"Observation size is not correct. Got {len(stacked_obs)} but expected {self.observation_size_stacked*self.n_stack+self.observation_size_solo}")
-        return stacked_obs
+            observation_solo = np.concatenate([observation_solo, self.User_command])
+        return super().get_observation(stacked_obs, observation_solo)
 
     def step(self, action):
         self.current_action = action        
@@ -193,8 +122,7 @@ class RL_Robot(Env):
 
         info = {}
         
-
-        self.n_steps += 1
+        super().step()
         self.last_action = self.current_action
         self.last2_action = self.last_action
         #print("reward: ", reward, "\n action: ", action ,"\n observations: ", observations)
@@ -202,12 +130,8 @@ class RL_Robot(Env):
         return observations, reward, terminated, truncated, info
 
     def reset(self, seed=None):
-        # Reset the state of the environment to an initial state
-        self.rhythm = 0
-        self.n_steps = 0           
-        self.current_action = np.zeros(self.action_size)
-        self.last_action = np.zeros(self.action_size)
-        self.last2_action = np.zeros(self.action_size)
+        super().reset()
+
 
         if "phase_signal" in self.observation_type_solo:
             self.phase_generator = PhaseGenerator(is_periodic=True, duration=1.0, dt=self.simulation_Timestep)
@@ -216,10 +140,6 @@ class RL_Robot(Env):
 
         # Reset the state of the environment to an initial state
         self.rabbit.reset()
-        # Clear the frame stack and add the initial observation
-        self.stacked_frames.clear()
-        for _ in range(self.n_stack):
-            self.stacked_frames.append(np.zeros(self.observation_size_stacked))
         #get the observations
         observations = np.array(self.get_observation())
 
@@ -230,13 +150,7 @@ class RL_Robot(Env):
 
         return observations, {}
     
-    def render(self):
-        if self.render_mode == "human":
-            if not hasattr(self, "last_time"):
-                self.last_time = time.time()
-            if self.simulation_Timestep-(time.time()-self.last_time) > 0:
-                time.sleep(self.simulation_Timestep-(time.time()-self.last_time))
-            self.last_time = time.time()
+
 
     def close(self):
         self.rabbit.close()

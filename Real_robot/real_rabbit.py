@@ -17,11 +17,12 @@ class Rabbit_real:
     """A class to represent a rabbit in the simulation
     """
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, simulation_Timestep=0.1):
         """Initialize the rabbit"""
         #get the names of the joints
         self.Joints_index = [1, 2,   3, 5,   4, 6,   7, 8]
-        self.Joint_correction = [0, -0.1,   0, 0,   0.1, 0.3,   0, -0.15]
+        #self.Joint_correction = [-0.05, 0.05,   0.1, 0,   0.1, 0.15,   0, -0.06]
+        self.Joint_correction = [-0.015, 0,   0, 0.02,   0.015, 0,   0.03, -0.03]
         self.numMotors = 8
 
         self.servoControler = ServoSupervisor(servo_id_order=self.Joints_index)
@@ -55,7 +56,7 @@ class Rabbit_real:
         #set the self collision of the robot
         #self.set_self_collision()
         self.lifetime = 0
-        self.timeStep_size = 0.01
+        self.timeStep_size = simulation_Timestep
         # Create a deque to hold (actions, time) tuples; maxlen=3 lets us compute acceleration.
         self.action_history = deque(maxlen=3)
 
@@ -262,7 +263,7 @@ class Rabbit_real:
         pose_positions: list with the goal positions of the servos, with the used range (-1, 1). e.g. [0,0,   0,0,   0,0,   0,0]
         """
         #map the servo_positions to the range of the servos
-        pose_positions = np.array(pose_positions)+np.array(self.Joint_correction)
+        pose_positions = np.array(pose_positions)
 
         servo_positions = [self._map(pos, range[0], range[1], self.Motors_range[i][0], self.Motors_range[i][1]) for i, pos in enumerate(pose_positions)]
 
@@ -271,9 +272,9 @@ class Rabbit_real:
         servo_positions[5] = math.pi - self.InverseKinematics(servo_positions[5], servo_positions[4])
 
         #transform the spine joint angles
-        servo_positions[0] = np.clip(pose_positions[1]*45+pose_positions[0]*-55, -55, 10)/180*math.pi
-        servo_positions[1] = np.clip(pose_positions[1]*-45+pose_positions[0]*-55, -50, 10)/180*math.pi
-
+        servo_positions[0] = np.clip(pose_positions[1]*45+pose_positions[0]*-40, -50, 10)/180*math.pi
+        servo_positions[1] = np.clip(pose_positions[1]*-45+pose_positions[0]*-40, -50, 10)/180*math.pi
+        servo_positions = np.array(servo_positions)+np.array(self.Joint_correction)*math.pi
         self.send_motor_commands(servo_positions)
 
         
@@ -487,6 +488,8 @@ class Rabbit_real:
         self.servoControler.stop_run()
         self.servoControler.close()
         self.cam.close()
+        if self.oscilloscope:
+            self.oscilloscope.disconnect()
         #p.disconnect()
 
         
@@ -499,7 +502,7 @@ if __name__=="__main__":
         get_func = real_rabbit.create_get_informations(["head_orientation", "head_angular_velocity", "head_linear_acceleration", "joint_angles", "joint_torques", "joint_velocities", "total_current"])
         print(get_func())
         time.sleep(1)
-        real_rabbit.send_goal_pose([0.1, 0.1,    0.1, 0.1,  0.1, 0.1,    0.1, 0.1])
+        #real_rabbit.send_goal_pose([0.1, 0.1,    0.1, 0.1,  0.1, 0.1,    0.1, 0.1])
         time.sleep(1)
 
     

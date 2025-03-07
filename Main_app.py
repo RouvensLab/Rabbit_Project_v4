@@ -30,9 +30,11 @@ class ExtendedTableWidget(QTableWidget):
         #get the whole data from the table and transform it to the timetable dictionary
         timetable = {}
         for row in range(self.rowCount()):
-            time = float(self.item(row, 0).text())
-            actions = [float(self.item(row, col).text()) for col in range(1, self.columnCount())]
+            time_item = self.item(row, 0)
+            time = float(time_item.text()) if time_item is not None else 0.0 and print("No time found!")
+            actions = [float(self.item(row, col).text()) if self.item(row, col) is not None else 0.0 for col in range(1, self.columnCount())]
             timetable[time] = actions
+        print("Timetable: ", timetable)
         return timetable
     
     def load_action_timetable(self, timetable):
@@ -67,6 +69,42 @@ class ExtendedTableWidget(QTableWidget):
         self.setItem(position, 0, QTableWidgetItem(str(0.0)))  # Time
         for col in range(1, self.columnCount()):
             self.setItem(position, col, QTableWidgetItem(str(0.0)))  # Default action values
+
+    def add_action_row(self, actions, time=None, append=True):
+        """Appends a new row with the given time and action values."""
+        if append:
+            selected_row = self.rowCount()
+            if time is None:
+                previous_item = self.item(selected_row - 1, 0)
+                if previous_item is not None:
+                    time = float(previous_item.text()) + 1
+                else:
+                    print("No previous time found! Action row is not there!")
+            self.insert_action_row(time, actions, selected_row)
+        else:
+            selected_row = self.currentRow()
+            if (selected_row == -1):  # If no row selected
+                selected_row = self.rowCount()
+            #get a time between the last time and the next time
+            if time is None:
+                time1 = float(self.item(selected_row, 0).text())
+                if selected_row+1 == self.rowCount():
+                    time = time1 + 1
+                else:
+                    time2 = float(self.item(selected_row+1, 0).text())
+                    time = (time1 + time2) / 2
+            self.insert_action_row(time, actions, selected_row + 1)
+
+    def insert_action_row(self, time, actions, position=None):
+        """Inserts a new row with the given time and action values at the given position."""
+        #actions = actions_func()
+        if (position is None):
+            # If no position specified, append a new row at the end
+            position = self.rowCount()
+        self.insertRow(position)
+        self.setItem(position, 0, QTableWidgetItem(str(time)))
+        for col, action_value in enumerate(actions):
+            self.setItem(position, col + 1, QTableWidgetItem(str(action_value)))  # Shift column by 1 for time
 
     def highlight_active_row(self, row):
         # Highlight the active row
@@ -193,7 +231,7 @@ class ActionTimetableEditor(QMainWindow):
         "observation_type_solo": ["phase_signal"],
         "terrain_type": "flat",
         "Horizon_Length":True,
-        "recorded_movement_file_path_dic": {"PushSprint_v1": 5}, 
+        "recorded_movement_file_path_dic": {"PushSprint_v1": 5},
         "restriction_2D": False,
         "simulation_Timestep": 0.1
     }
@@ -208,6 +246,7 @@ class ActionTimetableEditor(QMainWindow):
         self.env_param_editor = None
 
         self.control_input = None
+        self.action = [0]*8
 
         # Create the Real Robot
         self.RLRobot_param_kwargs = {
@@ -216,7 +255,6 @@ class ActionTimetableEditor(QMainWindow):
             "observation_type_solo": ["phase_signal"],
             "simulation_Timestep": 0.1,
             "obs_time_space": 1,
-            "simulation_Timestep": 0.1
         }
         self.RLRobot_starup_parms = {"render_mode": "fast", "gui": True, "RobotType": "Rabbit_mesured"}
         self.RlRobot = None
@@ -444,6 +482,16 @@ class ActionTimetableEditor(QMainWindow):
         self.remove_row_button.clicked.connect(self.table.remove_selected_row)
         button_layout.addWidget(self.remove_row_button)
 
+        #Button to paste current roboter position to the timetable
+        self.paste_button = QPushButton("Insert Current Position", self)
+        self.paste_button.clicked.connect(lambda: self.table.add_action_row(self.action, append=False))
+        button_layout.addWidget(self.paste_button)
+        #Button to paste current roboter position to the timetable
+        self.paste_button1 = QPushButton("Append Current Position", self)
+        self.paste_button1.clicked.connect(lambda: self.table.add_action_row(self.action, append=True))
+        button_layout.addWidget(self.paste_button1)
+
+
         self.copy_button = QPushButton("Copy Timetable to Clipboard", self)
         self.copy_button.clicked.connect(self.copy_to_clipboard)
         button_layout.addWidget(self.copy_button)
@@ -527,7 +575,7 @@ class ActionTimetableEditor(QMainWindow):
                 print("No Environment or Robot to reset!")
                 return None, None
         except Exception as e:
-            print(f"Error in reset_simulation: {e}")
+            print(f"--------------------Error in reset_simulation: {e}")
             self.no_error = False
             return None, None
 
@@ -545,16 +593,27 @@ class ActionTimetableEditor(QMainWindow):
         self.env_pause = True
         time.sleep(0.5)
         if self.controlMode_active.currentText() == "Auto":
-            self.control_input = None
+            self.close_control_input()
         elif self.controlMode_active.currentText() == "Body Control":
-            self.control_input = ControlInput(self)
+            self.open_control_input()
             #self.env_param_kwargs = self.def_RlEnv_param_kwargs
             ##self.open_RlEnv(self.RlEnv_param_kwargs)
             #self.start_thread()
         else:
-            self.control_input = ControlInput(self)
+            self.open_control_input()
         
         self.env_pause = False
+
+    def open_control_input(self):
+        if self.control_input:
+            self.control_input.close()
+        self.control_input = ControlInput(self)
+        self.control_input.Button_connect("RB", lambda: self.table.add_action_row(self.action, append=True))
+
+    def close_control_input(self):
+        if self.control_input:
+            self.control_input.close()
+            self.control_input = None
 
 
 
@@ -630,8 +689,9 @@ class ActionTimetableEditor(QMainWindow):
     def restart_Env_with_new_param(self, env_param_kwargs):
         self.cleanup_simulation()
         self.RlEnv_param_kwargs = env_param_kwargs
+        self.RLRobot_param_kwargs["simulation_Timestep"] = env_param_kwargs["simulation_Timestep"]
         self._init_RlEnv()
-        self.env_pause = True
+        self._init_RlRobot()
         self.start_thread()
         
 
@@ -667,51 +727,55 @@ class ActionTimetableEditor(QMainWindow):
             self.env_pause = True
             QMessageBox.warning(self, "Model Not Loaded", "No model loaded!")
 
+        print("Model loaded!--------------------------")
+
     def run_simulation(self):
         self.no_error = True
         self.end_thread = False
-        self.IntTimer = TimeInterval(0.1)
+        self.IntTimer = TimeInterval(self.time_step)
         try:
             obs, inf = self.reset_simulation()
             if obs is None:
+                print("obs is None Error!!!!!!!!!!!")
                 self.no_error = False
                 return
                 
             while not self.end_thread and self.no_error:
                 done = False
                 while not done and not self.end_thread and self.no_error:
+                    print("Simulation running-------------")
                     if not self.env_pause:
                         if self.controlMode_active.currentText() == "Body Control" and self.control_input is not None: # Body Control (Joystick) is controlling the robot
-                            action = self.control_input.get_BodyPose()
-                            print(action)
+                            self.action = self.control_input.get_BodyPose()
+                            print(self.action)
                         elif self.loaded_model is not None and self.button_mod_active.isChecked():# A RL-Agent is controlling the robot
                             try:
-                                action, pred_info = self.loaded_model.predict(obs)
+                                self.action, pred_info = self.loaded_model.predict(obs)
+                                print("RL-Agent Prediction: ", self.action)
                             except Exception as e:
                                 self.no_error = False
                                 print(f"Error in model prediction: {e}")
                         else: #self.controlMode_active.currentText() == "Auto": # Manual Expert is controlling the robot
                             try:
                                 life_time = self.RlEnv.simulation.rabbit.lifetime if self.isControled_dropdown.currentText() in ["Only Simulation", "Simulation_Imitation"] else self.RlRobot.rabbit.lifetime
-                                action, state, action_key = self.manual_exp.think_and_respond(obs, None, done, life_time)
-                                print(action)
+                                self.action, state, action_key = self.manual_exp.think_and_respond(obs, None, done, life_time)
+                                print(self.action)
                                 # Highlight the active row
                                 #action_key_index = list(self.manual_exp.action_timetable.keys()).index(self.manual_exp.action_key)
                                 self.table.highlight_active_row(action_key)
                             except Exception as e:
-                                self.no_error = False
                                 print(f"Error in manual response: {e}")
-                                traceback.print_exc()
+                                self.no_error = False
                         #print(action)
                         try:
                             if self.isControled_dropdown.currentText() == "Only Simulation":
-                                obs, reward, terminated, truncated, info = self.RlEnv.step(action)
+                                obs, reward, terminated, truncated, info = self.RlEnv.step(self.action)
                             elif self.isControled_dropdown.currentText() == "Simulation_Imitation":
-                                _, _, _, _, _ = self.RlRobot.step(action)
-                                obs, reward, terminated, truncated, info = self.RlEnv.step(action)
+                                _, _, _, _, _ = self.RlRobot.step(self.action)
+                                obs, reward, terminated, truncated, info = self.RlEnv.step(self.action)
 
                             elif self.isControled_dropdown.currentText() == "Only Real Robot":
-                                obs, reward, terminated, truncated, info = self.RlRobot.step(action)
+                                obs, reward, terminated, truncated, info = self.RlRobot.step(self.action)
                             done = (terminated or truncated) and self.auto_reset_checkbox.isChecked()
 
                             if done:
@@ -730,13 +794,13 @@ class ActionTimetableEditor(QMainWindow):
             
         finally:
             if not self.no_error:
-                QMessageBox.critical(self, "Error", "Simulation stopped due to an error!")
                 if self.RlEnv:
                     self.RlEnv.close()
                     self.RlEnv = None
                 if self.RlRobot:
                     self.RlRobot.close()
                     self.RlRobot = None
+                QMessageBox.critical(self, "Error", "Simulation stopped due to an error!")
 
         if not self.no_error:
             # Dialog if there is an error
@@ -814,8 +878,15 @@ class ManualExpert:
         #self.action_timetable = {0.0: [0.8, 0.0, -0.4, 0.2, -0.4, 0.2, 0.0, 0.0], 0.2: [0.1, 0.0, -0.4, 0.5, -0.4, 0.5, -0.7, -0.7], 0.35: [0.1, 0.0, -0.5, -0.2, -0.5, -0.2, -0.7, -0.7], 0.657: [1.0, 0.0, -0.1, 0.5, -0.1, 0.5, 0.0, 0.0]}
         #slow jumps
         #self.action_timetable = {0.0: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, 0.0, 0.0], 1.0: [0.5, 0.0, -0.3, 0.4, -0.3, 0.4, -0.5, -0.5], 1.25: [0.1, 0.0, -0.5, 0.3, -0.5, 0.3, -0.5, -0.5], 1.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 1.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
+        
+        #Männchen
+        self.action_timetable = {0.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -1.0, -1.0], 1.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -1.0, -1.0], 2.0: [0.999969482421875, 0.00390625, 0.00390625, 0.999969482421875, 0.00390625, 0.999969482421875, -1.0, -1.0], 3.0: [0.999969482421875, 0.00390625, -0.129425048828125, 0.403900146484375, -0.129425048828125, 0.403900146484375, -1.0, -1.0], 4.0: [0.999969482421875, 0.00390625, -0.62353515625, 0.529388427734375, -0.62353515625, 0.529388427734375, -1.0, -1.0], 5.0: [0.999969482421875, 0.00390625, 0.00390625, 0.450958251953125, 0.00390625, 0.450958251953125, -1.0, -1.0], 6.0: [-0.835296630859375, -0.4039306640625, 0.00390625, 0.01959228515625, 0.00390625, 0.01959228515625, -0.13726806640625, -0.160797119140625], 7.0: [-0.207855224609375, -1.0, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -0.23138427734375, -0.254913330078125], 8.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, 0.137237548828125, -0.04315185546875], 9.0: [0.192138671875, 0.999969482421875, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, 0.1607666015625, -0.207855224609375]}
+        
+        #slow jumps
+        #self.action_timetable = {0.0: [-0.003936767578125, 0.0, -0.003936767578125, 0.0, -0.003936767578125, 0.0, -0.160797119140625, -0.160797119140625], 1.0: [0.999969482421875, 0.0, 0.00390625, 0.2, 0.00390625, 0.2, -0.160797119140625, -0.160797119140625], 2.0: [0.5, 0.0, -0.4039306640625, 0.3, -0.4039306640625, 0.3, -1.0, -1.0], 3.0: [0.5, 0.0, -0.5, 0.5, -0.5, 0.5, -0.160797119140625, -0.0902099609375]}
 
-
+    
+    
     def think_and_respond(self, obs_, state, done, current_time=0):
         # Define the action based on the time table
         action_keytimes = list(self.action_timetable.keys())

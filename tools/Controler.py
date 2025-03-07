@@ -24,6 +24,9 @@ class VirtualJoystick:
         self.vector[1] += (target_vector[1] - self.vector[1]) * self.dynamics
 
         return self.vector
+    
+    def close(self):
+        pass
 
 class VirtualControler:
     def __init__(self):
@@ -53,6 +56,12 @@ class VirtualControler:
     def get_right_JoystickVector(self):
         return self.right_joystick.update_vector(self.keys_pressed, 'i', 'k', 'j', 'l')
     
+    # def get_Button(self, button):
+    #     return button in self.keys_pressed
+    
+    def close(self):
+        self.key_listener.stop()
+    
 class ControlInput:
     def __init__(self, main_window):
         self.main_window = main_window  # Reference to the MainWindow
@@ -68,8 +77,31 @@ class ControlInput:
         self.joystick_thread = threading.Thread(target=self.detect_joysticks)
         self.joystick_thread.start()
 
+        # Start a background thread to listen to JoyButton events
+        self.joybutton_thread = threading.Thread(target=self.JoyButton_event_listener)
+        self.joybutton_thread.start()
+
+
         # initialize the virtual controler
         self.virtual_controler = VirtualControler()
+
+        self.Button_connect_func = {
+            "a": [],
+            "b": [],
+            "x": [],
+            "y": [],
+            "RB": [],
+            "LB": [],
+        }
+        self.Button_translate = {
+            "a": 0,
+            "b": 1,
+            "x": 2,
+            "y": 3,
+            "RB": 5,
+            "LB": 4,
+        }
+
 
 
 
@@ -85,6 +117,35 @@ class ControlInput:
         while self.running:
             self.check_joystick()
             pygame.time.wait(1000)
+
+
+    def close(self):
+        self.running = False
+        self.joystick_thread.join()
+        self.joybutton_thread.join()
+        if self.joystick:
+            self.joystick.quit()
+        pygame.quit()
+        self.virtual_controler.close()
+
+    #event listener for Buttons
+    def Button_connect(self, button, func):
+        self.Button_connect_func[button].append(func)
+
+    # the keyboard event listener
+    def JoyButton_event_listener(self):
+        while self.running:
+            if self.joystick:
+                pygame.event.pump()
+                for event in pygame.event.get():
+                    if event.type == pygame.JOYBUTTONDOWN:
+                        #print(f"Button {event.button} pressed")
+                        for button, funcs in self.Button_connect_func.items():
+                            if event.button == self.Button_translate[button]:
+                                for func in funcs:
+                                    func()
+            pygame.time.wait(100)
+            
 
     
 
@@ -156,16 +217,20 @@ class ControlInput:
 
         return pose_action
 
-    def stop(self):
-        self.running = False
-        self.joystick_thread.join()
-        self.key_listener.stop()
-
 if __name__ == "__main__":
     control_input = ControlInput(None)
-    try:
-        while True:
-            print([round(i, 2) for i in control_input.get_BodyPose()])
-            pygame.time.wait(100)
-    except KeyboardInterrupt:
-        control_input.stop()
+    control_input.Button_connect("a", lambda: print("Button A pressed"))
+    control_input.Button_connect("RB", lambda: print("Button RB pressed"))
+    for i in range(100):
+        print([round(i, 2) for i in control_input.get_BodyPose()])
+        pygame.time.wait(100)
+    
+    control_input.close()
+    control_input = None
+    #create
+    control_input = ControlInput(None)
+    for i in range(100):
+        print(control_input.get_BodyPose())
+        pygame.time.wait(100)
+
+    control_input.close()
