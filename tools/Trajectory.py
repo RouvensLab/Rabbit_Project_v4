@@ -9,7 +9,7 @@ class TrajectoryRecorder:
 
         
 
-    def new_trajectory(self, name, data_structure:list, path=r"Trajectories"):
+    def new_trajectory(self, name, data_structure:list, path=r"Trajectories\Recordings"):
         """Creates a new trajectory file with the given name and data structure.
         name: str
         data_structure: list with the real data names e.g. ["joint_angles", "joint_velocities", "joint_torques"]
@@ -34,7 +34,7 @@ class TrajectoryRecorder:
             with open(self.trajectory_path, "w") as f:
                 f.write("[]")
         
-    def load_trajectory(self, name, path=r"Trajectories"):
+    def load_trajectory(self, name, path=r"Trajectories\Recordings"):
         self.trajectory_name = name
         self.main_dir = path
         self.trajectory_path = os.path.join(self.main_dir, self.trajectory_name + ".json")

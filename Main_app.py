@@ -1,6 +1,6 @@
 import sys
 import time
-import ast
+
 import threading
 import traceback
 import numpy as np
@@ -17,197 +17,9 @@ from stable_baselines3 import SAC
 from tools.Controler import ControlInput
 from tools.TimeInterval import TimeInterval
 
-
-class ExtendedTableWidget(QTableWidget):
-    """Table with extendable rows."""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setColumnCount(9) # Time + 8 action values
-        self.setHorizontalHeaderLabels(['Time', 'Action1', 'Action2', 'Action3', 'Action4', 'Action5', 'Action6', 'Action7', 'Action8'])
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-    def get_dict(self):
-        #get the whole data from the table and transform it to the timetable dictionary
-        timetable = {}
-        for row in range(self.rowCount()):
-            time_item = self.item(row, 0)
-            time = float(time_item.text()) if time_item is not None else 0.0 and print("No time found!")
-            actions = [float(self.item(row, col).text()) if self.item(row, col) is not None else 0.0 for col in range(1, self.columnCount())]
-            timetable[time] = actions
-        print("Timetable: ", timetable)
-        return timetable
-    
-    def load_action_timetable(self, timetable):
-        self.setRowCount(len(timetable))
-
-        for row, (time, actions) in enumerate(timetable.items()):
-            self.setItem(row, 0, QTableWidgetItem(str(time)))
-            for col, action_value in enumerate(actions):
-                self.setItem(row, col + 1, QTableWidgetItem(str(action_value)))
-
-    def add_new_row(self):
-        # Insert a new row at the current selected position, or at the end if no selection
-        selected_row = self.currentRow()
-        if (selected_row == -1):  # If no row selected
-            selected_row = None
-        self.insert_empty_row(selected_row)
-    
-    def remove_selected_row(self):
-        # Remove the selected row
-        selected_row = self.currentRow()
-        if (selected_row != -1):
-            self.removeRow(selected_row)
-
-    def insert_empty_row(self, position=None):
-        """Inserts a new empty row at the given position (or at the end if no position is specified)."""
-        if (position is None):
-            # If no position specified, append a new row at the end
-            position = self.rowCount()
-        
-        self.insertRow(position)
-        # Insert default empty values (e.g., 0.0 for float) in the new row
-        self.setItem(position, 0, QTableWidgetItem(str(0.0)))  # Time
-        for col in range(1, self.columnCount()):
-            self.setItem(position, col, QTableWidgetItem(str(0.0)))  # Default action values
-
-    def add_action_row(self, actions, time=None, append=True):
-        """Appends a new row with the given time and action values."""
-        if append:
-            selected_row = self.rowCount()
-            if time is None:
-                previous_item = self.item(selected_row - 1, 0)
-                if previous_item is not None:
-                    time = float(previous_item.text()) + 1
-                else:
-                    print("No previous time found! Action row is not there!")
-            self.insert_action_row(time, actions, selected_row)
-        else:
-            selected_row = self.currentRow()
-            if (selected_row == -1):  # If no row selected
-                selected_row = self.rowCount()
-            #get a time between the last time and the next time
-            if time is None:
-                time1 = float(self.item(selected_row, 0).text())
-                if selected_row+1 == self.rowCount():
-                    time = time1 + 1
-                else:
-                    time2 = float(self.item(selected_row+1, 0).text())
-                    time = (time1 + time2) / 2
-            self.insert_action_row(time, actions, selected_row + 1)
-
-    def insert_action_row(self, time, actions, position=None):
-        """Inserts a new row with the given time and action values at the given position."""
-        #actions = actions_func()
-        if (position is None):
-            # If no position specified, append a new row at the end
-            position = self.rowCount()
-        self.insertRow(position)
-        self.setItem(position, 0, QTableWidgetItem(str(time)))
-        for col, action_value in enumerate(actions):
-            self.setItem(position, col + 1, QTableWidgetItem(str(action_value)))  # Shift column by 1 for time
-
-    def highlight_active_row(self, row):
-        # Highlight the active row
-        for col in range(self.columnCount()):
-            self.item(row, col).setBackground(Qt.green)
-        # Unhighlight the other rows
-        for other_row in range(self.rowCount()):
-            if (other_row != row):
-                for col in range(self.columnCount()):
-                    self.item(other_row, col).setBackground(Qt.white)
-
-class EnvParameterEditor(QWidget):
-    def __init__(self, env_param_kwargs, fixed_env_params, restart_callback):
-        super().__init__()
-        self.fixed_env_params = fixed_env_params
-        self.env_param_kwargs = self.overwrite_with_fixed_env_params(env_param_kwargs)
-
-        self.initUI(env_param_kwargs, restart_callback)
-
-    def initUI(self, env_param_kwargs, restart_callback):
-        self.restart_callback = restart_callback
-        
-        # Create a layout for the editor
-        layout = QVBoxLayout()
-        # shows a table with the current environment parameters
-        self.table_layout = QVBoxLayout()
-        self.table = QTableWidget()
-        self.table.setColumnCount(2)
-        self.table.setHorizontalHeaderLabels(['Parameter', 'Value'])
-        self.table_layout.addWidget(self.table)
-        self.load_env_parameters(env_param_kwargs)
-        layout.addLayout(self.table_layout)
-
-        # Add button to save the parameterchanges and restart/reopen the environment
-        button_layout = QHBoxLayout()
-        open_param_button = QPushButton("Open Environment", self)
-        open_param_button.clicked.connect(self.open_Env_param_from_file)
-        button_layout.addWidget(open_param_button)
-        self.save_button = QPushButton("Save and Restart", self)
-        self.save_button.clicked.connect(self.save_and_restart)
-        button_layout.addWidget(self.save_button)
-        layout.addLayout(button_layout)
-        self.setLayout(layout)
-
-    def overwrite_with_fixed_env_params(self, env_param_kwargs):
-        #remove all same keys of fix_env_params from the env_param_kwargs
-        for key in self.fixed_env_params.keys():
-            if key in env_param_kwargs:
-                env_param_kwargs.pop(key)
-                #add the fixed env params to the env_param_kwargs
-        #env_param_kwargs.update(self.fixed_env_params)
-        return env_param_kwargs
-
-
-    def load_env_parameters(self, env_param_kwargs):
-        # Load the environment parameters into the table
-        self.table.setRowCount(len(env_param_kwargs))
-        for row, (param_name, param_value) in enumerate(env_param_kwargs.items()):
-            self.table.setItem(row, 0, QTableWidgetItem(param_name))
-            if isinstance(param_value, (str)):
-                self.table.setItem(row, 1, QTableWidgetItem(str(f"'{param_value}'")))
-            else:
-                self.table.setItem(row, 1, QTableWidgetItem(str(param_value)))
-    def get_env_parameters(self):
-        # Get the environment parameters from the table
-        env_param_kwargs = {}
-        for row in range(self.table.rowCount()):
-            param_name = self.table.item(row, 0).text()
-            param_value = self.table.item(row, 1).text()
-            # Try to convert the parameter value to a float or int if possible or as a json string
-            # print(param_value)
-            env_param_kwargs[param_name] = ast.literal_eval(param_value)
-        print("Env_Parameters:   ", env_param_kwargs)
-        return env_param_kwargs
-
-    def open_Env_param_from_file(self):
-        # Opens a QFileDialog to select new environment parameters
-        file_dialog = QFileDialog(self, "Open Environment Parameters", r"Models", "Model Files (info.txt)")
-        if file_dialog.exec():
-            file_path = file_dialog.selectedFiles()[0]
-            # Load the environment parameters from the selected txt file
-            with open(file_path, "r") as f:
-                parameter_text = f.read()
-            #find the line that begins with "Env Parameters: " afterwards is a dictionary with the environment parameters
-            env_param_str = parameter_text.split("Env Parameters: ")[1]
-            env_param_str = env_param_str.split("\n")[0]
-            print(env_param_str)
-            #convert the string to a dictionary
-            try:
-                env_param_kwargs = ast.literal_eval(env_param_str)
-            except:
-                QMessageBox.warning(self, "Error", "Could not load the environment parameters from the file!")
-                return
-
-            self.env_param_kwargs = self.overwrite_with_fixed_env_params(env_param_kwargs)
-
-            self.load_env_parameters(self.env_param_kwargs)
-            QMessageBox.information(self, "Parameters Loaded", "Environment parameters loaded successfully!")
-        else:
-            QMessageBox.warning(self, "Parameters Not Loaded", "No parameters loaded!")
-
-    def save_and_restart(self):
-        self.restart_callback(self.get_env_parameters())
+from AppComponents.ExtendedTableWidget import ExtendedTableWidget
+from AppComponents.EnvParameterEditor import EnvParameterEditor
+from AppComponents.FolderWidget import FolderWidget
     
 class ActionTimetableEditor(QMainWindow):
     def __init__(self):
@@ -505,6 +317,11 @@ class ActionTimetableEditor(QMainWindow):
         self.camera_focus_button = QPushButton("Camera Focus", self)
         self.camera_focus_button.clicked.connect(self.camera_focus_change)
         button_layout.addWidget(self.camera_focus_button)
+
+        #add a fileexplorer to load a timetable
+        self.trajectory_folder_widget = FolderWidget(r"Trajectories", self)
+
+        button_layout.addWidget(self.trajectory_folder_widget)
 
         layout1.addLayout(button_layout, stretch=1)
         control_layout.addLayout(layout1, stretch=1)

@@ -16,6 +16,7 @@ class Rabbit:
     
     def __init__(self, init_pos= [0, 0, 0]):
         self.URDF_path = r"URDFs\URDF_description\urdf\URDF.xacro"
+        #self.URDF_path = r"URDFs\URDF_description\urdf\URDF_realRabbit.xacro"
         self._id = p.loadURDF(self.URDF_path, init_pos[0], init_pos[1], init_pos[2])
         self.init_pos = init_pos
 
@@ -79,7 +80,35 @@ class Rabbit:
     def set_new_mass(self):
         """Set new masses for every Bodypart (link) of the robot
         """
-        
+        self.masses = {
+            "Kopf": 0.121,
+            "Vorderläufe": 0.024,
+            "Oberkörper": 0.171,
+            "Mittelkörper": 0.291,
+            "Unterkörper": 0.311,
+            "Hinterläufe": 0.082
+        }
+        #define the body parts of the rabbit. Which links belong to which body part
+        body_parts = {
+            "Kopf": {4:0.8, 3:0.2},
+            "Vorderläufe": {6:0.5, 5:0.5},
+            "Oberkörper": {1: 0.25, 2:0.25, 7:0.25, 8:0.25},
+            "Mittelkörper": {0:0.25, 9:0.25, 22:0.25, 23:0.25/3, 10:0.25/3, 11:0.25/3},
+            "Unterkörper": {19:0.2, 21:0.2, 18:0.2, 20:0.2, 11:0.2},
+            "Hinterläufe": {12:0.2, 15:0.2, 13:0.2, 16:0.2, 14:0.1, 17:0.1}
+        }
+
+        #set the mass of the links
+        for body_part, links in body_parts.items():
+            mass = self.masses[body_part]
+            for link, weight in links.items():
+                p.changeDynamics(self._id, link, mass=mass*weight)
+        self.reset()
+
+
+
+
+
 
         
     def set_self_collision(self, collistionPartners = [(11, 14), (11, 13), (7, 3), (7, 4)], enable=True):
@@ -147,6 +176,32 @@ class Rabbit:
         """
         for i in range(-1, p.getNumJoints(self._id)):
             p.changeVisualShape(self._id, i, rgbaColor=[1, 1, 1, visibility])
+
+    def show_center_of_mass(self):
+        """Show the center of mass of the robot
+        """
+        self.change_Visibility(0.6)
+        # Calculate the center of mass in the world coordinates
+        total_mass = 0
+        weighted_com_sum = np.array([0.0, 0.0, 0.0])
+        
+        for i in range(p.getNumJoints(self._id)):
+            link_info = p.getLinkState(self._id, i, computeLinkVelocity=True)
+            # Get the center of mass of the link in world coordinates
+            com = link_info[2]
+            # Get the mass of the link
+            mass = p.getDynamicsInfo(self._id, i)[0]
+            # Accumulate the weighted sum of the center of mass
+            weighted_com_sum += np.array(com) * mass
+            # Accumulate the total mass
+            total_mass += mass
+        
+        # Calculate the overall center of mass
+        com = weighted_com_sum / total_mass
+        
+        print("Center of Mass:", com)
+        #point at the center of mass
+        p.addUserDebugText("Center of Mass", com, [1, 0, 0], 1)
 
     def convert_12_to_8_motors(self, motors_12_value):
         """
@@ -542,7 +597,7 @@ class Rabbit:
 
 
         #remove the UserDebugTexts
-        #p.removeAllUserDebugItems()
+        p.removeAllUserDebugItems()
 
 
 

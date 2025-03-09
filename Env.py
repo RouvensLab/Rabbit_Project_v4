@@ -37,7 +37,7 @@ class Simulation:
 
         elif rabbit_type == "Rabbit_v3_mesured":
             from Objects.Rabbit_v3 import Rabbit
-            from mesure_rabbt import get_measuredRabbit 
+            from mesure_rabbt import get_measuredRabbit
             self.rabbit = get_measuredRabbit(Rabbit,
                                             state_types_body=["head_orientation", "head_angular_velocity", "head_linear_acceleration" ], 
                                             state_types_servos=["joint_angles", "joint_velocities", "joint_torques"], 
@@ -141,34 +141,39 @@ class Simulation:
                 pass
 
 if __name__ == "__main__":
-    env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_real_mesured")
-    env.rabbit.create_seperate_Window()
+    env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
+    env.rabbit.set_new_mass()
+    #env.rabbit.create_seperate_Window()
     #env.show_world_coordinate_system()
     #env.rabbit.add_UserControlPanel(all_joints=False)
-    # env.rabbit.get_link_infos()
-    # time.sleep(10000)
-    funktion = env.rabbit.create_get_informations(["joint_angles"])
-    env.rabbit.servoControler.set_torque_state(7, True)
-    env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
+    env.rabbit.show_center_of_mass()
+    env.rabbit.get_link_infos()
+    time.sleep(10000)
+    # funktion = env.rabbit.create_get_informations(["joint_angles"])
+    # env.rabbit.servoControler.set_torque_state(7, True)
+    # env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
     while True:
         print("step start")
         time.sleep(0.1)
         env.Sim_step()
-        #env.rabbit.send_goal_pose([1, 1, 1, 1, 1, 1, 1, 1])
-        print("Joint angles", funktion())
+        env.rabbit.send_goal_pose([1, 1, 1, 1, 1, 1, 1, 1])
+        # print("Joint angles", funktion())
 
         time.sleep(0.1)
         print("step")
         #env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
-        print("Joint angles", funktion())
+        # print("Joint angles", funktion())
 
-        # for i in range(100):
-        #     # Send new command to the motors
-        #     env.rabbit.send_motor_commands([2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
-        #     time.sleep(0.2)
-            
-        # for i in range(100):
-        #     # Send new command to the motors
-        #     env.rabbit.send_motor_commands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-        #     env.Sim_step()
-        #     time.sleep(0.2)
+        for i in range(100):
+            # Send new command to the motors
+            env.rabbit.send_motor_commands([2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
+            env.Sim_step()
+            env.rabbit.show_center_of_mass()
+            time.sleep(0.2)
+        
+        for i in range(100):
+            # Send new command to the motors
+            env.rabbit.send_motor_commands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+            env.Sim_step()
+            env.rabbit.show_center_of_mass()
+            time.sleep(0.2)
