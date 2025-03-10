@@ -293,6 +293,16 @@ class Rabbit:
             else:
                 new_orn_values[i] = value
         return new_orn_values
+    
+    def convert_joint_angles_to_actions(self, joint_angles):
+        """Convert the joint angles to actions
+        joint_angles: list with the joint angles
+        return: list with the actions
+        """
+        positions = self.convert_8_to_12_motors(joint_angles)
+        action12 = [self._map(pos, self.Motors_range[i][0], self.Motors_range[i][1], -1, 1) for i, pos in enumerate(positions)]
+        return self.convert_12_to_8_motors(action12)
+
         
 
         

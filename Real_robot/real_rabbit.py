@@ -9,7 +9,7 @@ import pybullet as p
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 sys.path.append(project_root)
 
-from Real_robot.ServoSupervisor_v1 import ServoSupervisor
+from Real_robot.ServoControl.ServoSupervisor_v1 import ServoSupervisor
 from Real_robot.Cameras.Camera_v3 import Camera
 from Real_robot.Oscilloscope.RigolOszRead import OscilloscopeReader
 

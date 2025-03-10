@@ -35,6 +35,9 @@ class TrajectoryRecorder:
                 f.write("[]")
         
     def load_trajectory(self, name, path=r"Trajectories\Recordings"):
+        """Load a trajectory file with the given name"""
+        if name.endswith(".json"):
+            name = name[:-5]
         self.trajectory_name = name
         self.main_dir = path
         self.trajectory_path = os.path.join(self.main_dir, self.trajectory_name + ".json")

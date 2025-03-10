@@ -1,14 +1,16 @@
 import sys
 import time
+import os
+import json
 
 import threading
 import traceback
 import numpy as np
 from PySide6.QtWidgets import (
     QApplication,  QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,QStatusBar,
-    QPushButton, QHeaderView, QMessageBox, QSlider, QFileDialog, QLabel, QCheckBox, QComboBox, QMainWindow, QTabWidget
+    QPushButton, QHeaderView, QMessageBox, QSlider, QFileDialog, QLabel, QCheckBox, QComboBox, QMainWindow, QTabWidget, QLineEdit,QStyleFactory
 )
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon,QPalette, QColor
 from PySide6.QtCore import Qt,QSettings, QThread, Signal, Slot
 
 from RL_Agent_Env import RL_Env
@@ -16,6 +18,7 @@ from RL_Robot_Env import RL_Robot
 from stable_baselines3 import SAC
 from tools.Controler import ControlInput
 from tools.TimeInterval import TimeInterval
+from tools.Trajectory import TrajectoryRecorder
 
 from AppComponents.ExtendedTableWidget import ExtendedTableWidget
 from AppComponents.EnvParameterEditor import EnvParameterEditor
@@ -275,6 +278,21 @@ class ActionTimetableEditor(QMainWindow):
 
         # Table for action timetable
         self.table_layout = QVBoxLayout()
+        def_timeTable_name = "Action Timetable"
+        def_timeTable_folder_path = r"Trajectories\Experts"
+        self.timeTable_toolbar = QHBoxLayout()
+        
+        self.timeTable_folderPath = QLabel(def_timeTable_folder_path)
+        self.timeTable_toolbar.addWidget(self.timeTable_folderPath)
+        self.timeTable_name_input = QLineEdit(self)
+        self.timeTable_name_input.setPlaceholderText("Action Timetable Name")
+        self.timeTable_name_input.setText(def_timeTable_name)
+        self.timeTable_toolbar.addWidget(self.timeTable_name_input)
+        self.timeTable_save_button = QPushButton("Save Timetable", self)
+        self.timeTable_save_button.clicked.connect(self.saveTimeTable)
+        self.timeTable_toolbar.addWidget(self.timeTable_save_button)
+        self.table_layout.addLayout(self.timeTable_toolbar)
+
         self.table = ExtendedTableWidget(self)
         self.table.load_action_timetable(self.manual_exp.action_timetable)
         self.table.cellChanged.connect(self.on_table_cell_changed)
@@ -319,8 +337,8 @@ class ActionTimetableEditor(QMainWindow):
         button_layout.addWidget(self.camera_focus_button)
 
         #add a fileexplorer to load a timetable
-        self.trajectory_folder_widget = FolderWidget(r"Trajectories", self)
-
+        self.trajectory_folder_widget = FolderWidget(r"Trajectories")
+        self.trajectory_folder_widget.fileClicked.connect(self.load_timetable)
         button_layout.addWidget(self.trajectory_folder_widget)
 
         layout1.addLayout(button_layout, stretch=1)
@@ -546,6 +564,86 @@ class ActionTimetableEditor(QMainWindow):
 
         print("Model loaded!--------------------------")
 
+    def load_timetable(self, folder_path, file_name: str):
+        # Check if the file is a JSON file
+        if ".json" in file_name:
+            #remove the .json from the file name
+            file_name = file_name.replace(".json", "")
+        #pause the simulation
+        self.env_pause = True
+
+        # Load the timetable from the selected file
+        file_path = os.path.join(folder_path, file_name +".json")
+        if "Experts" in file_path:
+            # The structure of the file corresponds to the manual expert timetable
+            try:
+                with open(file_path, 'r') as file:
+                    data = json.load(file)
+                    #self.manual_exp.action_timetable = data
+                    self.table.load_action_timetable(data)
+                    QMessageBox.information(self, "Timetable Loaded", "Timetable loaded successfully!")
+                    self.timeTable_folderPath.setText(folder_path)
+                    self.timeTable_name_input.setText(file_name)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to load timetable from {file_name}: {e}")
+        else:
+            try:
+                #open the file with Trajecotry
+                recTrajectory = TrajectoryRecorder()
+                recTrajectory.load_trajectory(file_name, folder_path)
+                #get the keys of the trajectory
+                keys = recTrajectory.get_keys()
+                if "actions" in keys:
+                    #load the actions to the timetable
+                    actions = recTrajectory.get_keyValues("actions")
+                    times = recTrajectory.get_times()
+                    #concatenate the times and actions
+                    time_table_dic = dict(zip(times, actions))
+                    self.table.load_action_timetable(time_table_dic)
+                    QMessageBox.information(self, "Timetable Loaded", "Timetable loaded successfully!")
+                    self.timeTable_folderPath.setText(folder_path)
+                    self.timeTable_name_input.setText(file_name)
+                elif "joint_angles" in keys:
+                    #load the joint positions to the timetable
+                    joint_positions = recTrajectory.get_keyValues("joint_angles")
+                    times = recTrajectory.get_times()
+                    #concatenate the times and actions
+                    time_table_dic = dict(zip(times, joint_positions))
+                    #convert the joint positions to actions
+                    time_table_dic = {key: self.RlEnv.simulation.rabbit.convert_joint_angles_to_actions(value) for key, value in time_table_dic.items()}
+                    self.table.load_action_timetable(time_table_dic)
+                    QMessageBox.information(self, "Timetable Loaded", "Timetable loaded successfully!")
+                    self.timeTable_folderPath.setText(folder_path)
+                    self.timeTable_name_input.setText(file_name)
+                else:
+                    QMessageBox.warning(self, "Error", "No actions or joint angles found in the trajectory file!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to load timetable from {file_name}: {e}")
+
+    def saveTimeTable(self):
+        def_path_folder = r"Trajectories\Experts"
+        folder_path = def_path_folder
+        file_name = self.timeTable_name_input.text()
+        if not file_name:
+            QMessageBox.warning(self, "Error", "Please enter a name for the timetable!")
+            return
+        file_path = os.path.join(folder_path, file_name + ".json")
+        #check whether the folder and file exists, and if so, ask the user if he wants to overwrite the file
+        if os.path.exists(file_path):
+            reply = QMessageBox.question(self, "File Exists", f"The file {file_name} already exists! Do you want to overwrite it?", QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.No:
+                return
+        try:
+            # Save the timetable to the selected file
+            with open(file_path, 'w') as file:
+                json.dump(self.table.get_dict(), file, indent=4)
+            QMessageBox.information(self, "Timetable Saved", "Timetable saved successfully!")
+            self.timeTable_folderPath.setText(folder_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save timetable to {file_name}: {e}")
+
+
+
     def run_simulation(self):
         self.no_error = True
         self.end_thread = False
@@ -684,20 +782,17 @@ class ManualExpert:
         #pusch sprint v1
         #self.action_timetable = {0.0: [-0.5, 0.0, -0.2, 0.4, -0.2, 0.4, -0.5, -0.5], 0.2: [-0.5, 0.0, 0.5, -0.4, 0.5, -0.4, 1.0, 1.0], 0.45: [1.0, 0.0, 0.5, 0.6, 0.5, 0.6, 0.0, 0.0], 0.6: [1.0, 0.0, -0.2, 0.6, -0.2, 0.6, -0.5, -0.5], 0.7: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
 
-        #sitting
-        #self.action_timetable = {0:  [-0.3, 0,   -0.5, 0.3,  -0.5, 0.3,    0, 0]}
-
         #big jumps
-        # self.action_timetable = {0.0: [0.5, 0.0, -0.2, -0.3, -0.2, -0.3, 0.0, 0.0], 0.25: [0.4, 0.0, -0.2, 0.2, -0.2, 0.2, 0.0, 0.0], 0.5: [0.1, 0.0, -0.8, -0.9, -0.8, -0.9, -0.5, -0.5], 0.75: [1.0, 0.0, 0.1, 0.5, 0.1, 0.5, 0.0, 0.0]}
+        #self.action_timetable = {0.0: [0.5, 0.0, -0.2, -0.3, -0.2, -0.3, 0.0, 0.0], 0.25: [0.4, 0.0, -0.2, 0.2, -0.2, 0.2, 0.0, 0.0], 0.5: [0.1, 0.0, -0.8, -0.9, -0.8, -0.9, -0.5, -0.5], 0.75: [1.0, 0.0, 0.1, 0.5, 0.1, 0.5, 0.0, 0.0]}
         #fast jump Sim
-        self.action_timetable = {0.0: [0.9, 0.0, -0.3, 0.4, -0.3, 0.4, 0.0, 0.0], 0.25: [0.7, 0.0, -0.5, 0.3, -0.5, 0.3, 0.0, 0.0], 0.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 0.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
+        #self.action_timetable = {0.0: [0.9, 0.0, -0.3, 0.4, -0.3, 0.4, 0.0, 0.0], 0.25: [0.7, 0.0, -0.5, 0.3, -0.5, 0.3, 0.0, 0.0], 0.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 0.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
         #Sim Jumps
         #self.action_timetable = {0.0: [0.8, 0.0, -0.4, 0.2, -0.4, 0.2, 0.0, 0.0], 0.2: [0.1, 0.0, -0.4, 0.5, -0.4, 0.5, -0.7, -0.7], 0.35: [0.1, 0.0, -0.5, -0.2, -0.5, -0.2, -0.7, -0.7], 0.657: [1.0, 0.0, -0.1, 0.5, -0.1, 0.5, 0.0, 0.0]}
         #slow jumps
-        #self.action_timetable = {0.0: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, 0.0, 0.0], 1.0: [0.5, 0.0, -0.3, 0.4, -0.3, 0.4, -0.5, -0.5], 1.25: [0.1, 0.0, -0.5, 0.3, -0.5, 0.3, -0.5, -0.5], 1.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 1.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
+        self.action_timetable = {0.0: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, 0.0, 0.0], 1.0: [0.5, 0.0, -0.3, 0.4, -0.3, 0.4, -0.5, -0.5], 1.25: [0.1, 0.0, -0.5, 0.3, -0.5, 0.3, -0.5, -0.5], 1.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 1.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
         
         #Männchen
-        self.action_timetable = {0.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -1.0, -1.0], 1.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -1.0, -1.0], 2.0: [0.999969482421875, 0.00390625, 0.00390625, 0.999969482421875, 0.00390625, 0.999969482421875, -1.0, -1.0], 3.0: [0.999969482421875, 0.00390625, -0.129425048828125, 0.403900146484375, -0.129425048828125, 0.403900146484375, -1.0, -1.0], 4.0: [0.999969482421875, 0.00390625, -0.62353515625, 0.529388427734375, -0.62353515625, 0.529388427734375, -1.0, -1.0], 5.0: [0.999969482421875, 0.00390625, 0.00390625, 0.450958251953125, 0.00390625, 0.450958251953125, -1.0, -1.0], 6.0: [-0.835296630859375, -0.4039306640625, 0.00390625, 0.01959228515625, 0.00390625, 0.01959228515625, -0.13726806640625, -0.160797119140625], 7.0: [-0.207855224609375, -1.0, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -0.23138427734375, -0.254913330078125], 8.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, 0.137237548828125, -0.04315185546875], 9.0: [0.192138671875, 0.999969482421875, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, 0.1607666015625, -0.207855224609375]}
+        #self.action_timetable = {0.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -1.0, -1.0], 1.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -1.0, -1.0], 2.0: [0.999969482421875, 0.00390625, 0.00390625, 0.999969482421875, 0.00390625, 0.999969482421875, -1.0, -1.0], 3.0: [0.999969482421875, 0.00390625, -0.129425048828125, 0.403900146484375, -0.129425048828125, 0.403900146484375, -1.0, -1.0], 4.0: [0.999969482421875, 0.00390625, -0.62353515625, 0.529388427734375, -0.62353515625, 0.529388427734375, -1.0, -1.0], 5.0: [0.999969482421875, 0.00390625, 0.00390625, 0.450958251953125, 0.00390625, 0.450958251953125, -1.0, -1.0], 6.0: [-0.835296630859375, -0.4039306640625, 0.00390625, 0.01959228515625, 0.00390625, 0.01959228515625, -0.13726806640625, -0.160797119140625], 7.0: [-0.207855224609375, -1.0, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -0.23138427734375, -0.254913330078125], 8.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, 0.137237548828125, -0.04315185546875], 9.0: [0.192138671875, 0.999969482421875, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, 0.1607666015625, -0.207855224609375]}
         
         #slow jumps
         #self.action_timetable = {0.0: [-0.003936767578125, 0.0, -0.003936767578125, 0.0, -0.003936767578125, 0.0, -0.160797119140625, -0.160797119140625], 1.0: [0.999969482421875, 0.0, 0.00390625, 0.2, 0.00390625, 0.2, -0.160797119140625, -0.160797119140625], 2.0: [0.5, 0.0, -0.4039306640625, 0.3, -0.4039306640625, 0.3, -1.0, -1.0], 3.0: [0.5, 0.0, -0.5, 0.5, -0.5, 0.5, -0.160797119140625, -0.0902099609375]}
@@ -742,7 +837,30 @@ if __name__=="__main__":
     # env.close()
 
     app = QApplication(sys.argv)
+    # Fusion dark style
+   # Set the Fusion style
+    # app.setStyle(QStyleFactory.create("Fusion"))
 
+    # Create a custom dark palette
+    '''
+    dark_palette = QPalette()
+    dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+    dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+    dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
+
+    # Apply the custom palette to the application
+    app.setPalette(dark_palette)
+    '''
     gui = ActionTimetableEditor()
   
     gui.show()

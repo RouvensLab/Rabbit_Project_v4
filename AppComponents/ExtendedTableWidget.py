@@ -103,3 +103,12 @@ class ExtendedTableWidget(QTableWidget):
             if (other_row != row):
                 for col in range(self.columnCount()):
                     self.item(other_row, col).setBackground(Qt.white)
+
+
+    def clear_table(self):
+        self.setRowCount(0)
+        self.setColumnCount(9)
+        self.setHorizontalHeaderLabels(['Time', 'Action1', 'Action2', 'Action3', 'Action4', 'Action5', 'Action6', 'Action7', 'Action8'])
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.insert_empty_row()
+        
