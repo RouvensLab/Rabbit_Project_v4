@@ -40,6 +40,8 @@ class RL_Base(Env):
             "joint_velocities": 8,
             "joint_torques": 8,
 
+            "total_current": 3,
+
             "feet_forces": 4,
             "phase_signal": 1,
             "last_action": self.action_size,

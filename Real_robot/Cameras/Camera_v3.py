@@ -53,9 +53,11 @@ class Camera:
                                 self.cam_data = img
                                 print(f"Frame received: shape={img.shape}")
                 else:
-                    print(f"Failed to connect to camera stream: {response.status_code}")
+                    #print(f"Failed to connect to camera stream: {response.status_code}")
+                    pass
             except requests.RequestException as e:
-                print(f"Error fetching camera stream: {e}")
+                #print(f"Error fetching camera stream: {e}")
+                pass
             time.sleep(0.1)  # Add a short delay to avoid excessive requests
 
     def on_error(self, _, error):

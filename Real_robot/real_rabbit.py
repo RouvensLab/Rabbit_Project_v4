@@ -4,12 +4,13 @@ import math
 import sys
 import os
 import pybullet as p
+import time
 
 # Assuming Bunny_Project_v2 is the project root directory
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 sys.path.append(project_root)
 
-from Real_robot.ServoControl.ServoSupervisor_v1 import ServoSupervisor
+from Real_robot.ServoControl.ServoSupervisor_Test import ServoSupervisor
 from Real_robot.Cameras.Camera_v3 import Camera
 from Real_robot.Oscilloscope.RigolOszRead import OscilloscopeReader
 
@@ -26,8 +27,11 @@ class Rabbit_real:
         self.numMotors = 8
 
         self.servoControler = ServoSupervisor(servo_id_order=self.Joints_index)
-        self.servoControler.ScanServos()
         self.servoControler.start_run()
+       
+   
+        time.sleep(4)
+        print(self.servoControler.load)
 
 
         
@@ -145,7 +149,6 @@ class Rabbit_real:
 
         This allows us to save resources, like RAM, because we can only get the informations we need.
         """
-        self.servoControler.stop_run()
         #create a list of all the status types
         lambda_list = []
         left_joint_types = []
@@ -170,8 +173,6 @@ class Rabbit_real:
             else:
                 raise ValueError(f"Unknown state type: {state_type}")
         
-        #create a getfunction
-        self.servoControler.continiu_run()
         def get_informations():
             return [func() for func in lambda_list]
 
@@ -284,8 +285,23 @@ class Rabbit_real:
         motor_commands: list with the motor commands in the order of the motors
         """
         #convert radians to 0 -4094
-        print("motor_commands", motor_commands)
-        self.servoControler.action_queue.put({"positions": motor_commands, "speeds": [4094]*8})
+        #print("motor_commands", motor_commands)
+        self.servoControler.set_PositionSpeed(motor_commands, [4094]*8)
+
+    def stop_all_motors(self):
+        """Stop all motors
+        """
+        for i in range(1, 9):
+            self.servoControler.setTorque(i, False)
+
+        time.sleep(2)
+
+    def enabel_all_motors(self):
+        """Enable all motors
+        """
+        for i in self.Joints_index:
+            self.servoControler.setTorque(i, True)
+    
 
 
     
@@ -301,6 +317,7 @@ class Rabbit_real:
 
         #update action rate
         self.update_action_history(self.servoControler.get_ServoStates("Position"))# not quiet right. Because servo 1 and 2 are not the same as the one in the simulation
+        self.servoControler.update_servoStates()
 
 
 
@@ -356,7 +373,7 @@ class Rabbit_real:
         a1 = self._map(FrontHip_angle, -math.pi, math.pi, 0, 2*math.pi)
         a2 = 0.5*math.pi-Knee_angle
 
-        print("a1:", a1/pi*180, "a2:", a2/pi*180, "Knee_angle:", Knee_angle/pi*180, "FrontHip_angle:", FrontHip_angle/pi*180)
+        #print("a1:", a1/pi*180, "a2:", a2/pi*180, "Knee_angle:", Knee_angle/pi*180, "FrontHip_angle:", FrontHip_angle/pi*180)
 
 
         #calculate the angle of the BackHip
@@ -378,10 +395,10 @@ class Rabbit_real:
         # shoulden't be greater than 1
         if z > 1:
             z = 1
-            print("z is greater than 1")
+            #print("z is greater than 1")
         elif z < -1:
             z = -1
-            print("z is smaller than -1")
+            #print("z is smaller than -1")
 
         phi1 = math.acos(z)
         
@@ -401,7 +418,7 @@ class Rabbit_real:
         b1 = phi1+phi2
         m2 = np.array([math.cos(b1+pi)*S2, math.sin(b1+pi)*S2])
         m3 = t1_vec-m2
-        print("phi1: ", phi1, "phi2: ", phi2, t1_vec, "b1", b1/pi*180)
+        #print("phi1: ", phi1, "phi2: ", phi2, t1_vec, "b1", b1/pi*180)
 
 
         return b1
@@ -496,10 +513,11 @@ class Rabbit_real:
 if __name__=="__main__":
     import time
     real_rabbit = Rabbit_real()
+    real_rabbit.stop_all_motors()
+    get_func = real_rabbit.create_get_informations(["head_orientation", "head_angular_velocity", "head_linear_acceleration", "joint_angles", "joint_torques", "joint_velocities", "total_current"])
     while True:
         real_rabbit.step(0.01)
         real_rabbit.send_goal_pose([0, 0,    0, 0,  0, 0,    0, 0])
-        get_func = real_rabbit.create_get_informations(["head_orientation", "head_angular_velocity", "head_linear_acceleration", "joint_angles", "joint_torques", "joint_velocities", "total_current"])
         print(get_func())
         time.sleep(1)
         #real_rabbit.send_goal_pose([0.1, 0.1,    0.1, 0.1,  0.1, 0.1,    0.1, 0.1])

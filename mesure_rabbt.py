@@ -79,7 +79,7 @@ def get_measuredRabbit(rabbit_type,
         def step(self, *args, **kwargs):
             super().step(*args, **kwargs)
             # Record the data at each simulation step
-            print(f"Send Data to GUI ")
+            #print(f"Send Data to GUI ")
             current_time = self.get_lifetime()
             if current_time - self.last_send_time >= 0.05:  # Check if 10ms have passed
                 self.last_send_time = current_time
@@ -322,9 +322,9 @@ class PlotterWidget(QWidget):
                 data_new = self.queue.get()
                 #self.time, self.BodyData, self.ServoData = self.queue.get()
                 self.time, self.BodyData, self.ServoData = data_new
-                print(self.time)
-                print(self.BodyData)
-                print(self.ServoData)
+                # print("Time", self.time)
+                # print("BodyData", self.BodyData)
+                #print("ServoData", self.ServoData[0][6])
                 self.update_add_Plots(self.time, self.BodyData, self.ServoData)
                 #self.update_add_ServoPlots(self.time, self.ServoData)
             except queue.Empty:

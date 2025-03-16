@@ -33,7 +33,7 @@ class ServoSupervisor(threading.Thread):
 
         #For sending comands to the servos
         self.action_queue = queue.Queue()
-        self.current_actions = {"positions": [0]*8, "speeds": [0]*8}
+        self.current_actions = {"positions": [0]*8, "speeds": [0]*8, "torque": [1]*8}
 
         self._init_servocontroler()
 
@@ -109,9 +109,9 @@ class ServoSupervisor(threading.Thread):
         servo_pres = {}
         for servo_id in self.servoIDs:
             model_number ,result, error = self.packetHandler.ping(servo_id)    
-            print(f"Servo ID: {servo_id}: Model Number {model_number}, Result: {result}, Error: {error}")
+            #print(f"Servo ID: {servo_id}: Model Number {model_number}, Result: {result}, Error: {error}")
             if result == COMM_SUCCESS:
-                print(f"Servo ID: {servo_id}: Model Number {model_number}")
+                print(f"Servo ID: {servo_id}: Model Number {model_number} Present")
                 servo_pres[servo_id] = True
             else:
                 print(f"Servo ID: {servo_id} Not present")
@@ -283,8 +283,6 @@ class ServoSupervisor(threading.Thread):
             data, sts_comm_result, sts_error = self.packetHandler.ReadTorqueEnable(sts_id=scs_id)
         elif dataType == "MobileSign":
             data, sts_comm_result, sts_error = self.packetHandler.ReadMoving(sts_id=scs_id)
-        elif dataType == "All":
-            data, sts_comm_result, sts_error = self.packetHandler.ReadAll(sts_id=scs_id)
         else:
             print(f"Error: Unknown data type {dataType}")
         return data
@@ -319,16 +317,42 @@ class ServoSupervisor(threading.Thread):
         if self.parti_Update_state >= len(self.servoIDs)*len(self.upToDate_dataTypes):
             self.parti_Update_state = 0
             
-    def set_torque_state(self, scs_id, enable=True):
+    def setTorque_old(self, scs_id, enable=True):
         """Disable the torque of the servo"""
         if enable:
             scs_comm_result = self.packetHandler.Write_Torque(scs_id, 1)
+            self.current_actions["torque"][scs_id-1] = 1
         else:
             scs_comm_result = self.packetHandler.Write_Torque(scs_id, 0)
-        if scs_comm_result != COMM_SUCCESS:
+            self.current_actions["torque"][scs_id-1] = 0
+        if scs_comm_result[1] != COMM_SUCCESS :
             print(f"Error: Could not set the torque of servo {scs_id} to {enable}, Result: {scs_comm_result}")
+        else:
+            print(f"Torque of servo {scs_id} set to {enable}")
+        time.sleep(0.5)
+    
+    def setTorque(self, scs_id, enable=True):
+        if not self.packetHandler:
+            print("Error: Packet handler not initialized")
+            return False
+            
+        torque_value = 1 if enable else 0
+        torque_address = self.servo_state_structure["TorqueEnable"][2]
         
-
+        scs_comm_result, scs_error = self.packetHandler.write1ByteTxRx(
+            scs_id, 
+            torque_address, 
+            torque_value
+        )
+        
+        if scs_comm_result != COMM_SUCCESS:
+            print(f"Error: Could not set torque of servo {scs_id} to {enable}, Result: {self.packetHandler.getTxRxResult(scs_comm_result)}")
+            return False
+        else:
+            self.current_actions["torque"][scs_id-1] = torque_value
+            print(f"Torque of servo {scs_id} set to {enable}")
+            time.sleep(0.5)
+            return True
 
 
     def _map(self, x, in_min, in_max, out_min, out_max):
@@ -336,8 +360,8 @@ class ServoSupervisor(threading.Thread):
 
     def send_command(self, new_positions, new_speeds):
         """
-        The new position must be between 0 and 4094
-        The new speed must be between 0 and 4094
+        new_positions: A list of new positions for the servos. The new positions must be in radians
+        new_speeds: A list of new speeds for the servos. The new speeds must be in rad/s
 
         return: True if the new command is different from the previous command
         """
@@ -348,18 +372,18 @@ class ServoSupervisor(threading.Thread):
         # #check if the commands are the same as the previous commands
         # if new_positions == self.current_actions["positions"] and new_speeds == self.current_actions["speeds"]:
         #     return False
-        self.current_actions["positions"] = new_positions
-        self.current_actions["speeds"] = new_speeds
         
 
         #map the new_positions to the range of 0 to 4094
         for index, scs_id in enumerate(self.servoIDs):
-            position = self.calculate_rad_to_int(scs_id, new_positions[index])
-            speed = new_speeds[index]
-            print(f"ID: {scs_id}, Position: {position}, Speed: {speed}")
-            scs_addparam_result = self.packetHandler.SyncWritePosEx(scs_id, position, speed, self.SCS_MOVING_ACC)
-            if scs_addparam_result != True:
-                print("[ID:%03d] groupSyncWrite addparam failed" % scs_id) if self.showErrors else None
+            if self.current_actions["torque"][index] == 1:
+            
+                position = self.calculate_rad_to_int(scs_id, new_positions[index])
+                speed = new_speeds[index]
+                #print(f"ID: {scs_id}, Position: {position}, Speed: {speed}")
+                scs_addparam_result = self.packetHandler.SyncWritePosEx(scs_id, position, speed, self.SCS_MOVING_ACC)
+                if scs_addparam_result != True:
+                    print("[ID:%03d] groupSyncWrite addparam failed" % scs_id) if self.showErrors else None
 
         scs_comm_result = self.packetHandler.groupSyncWrite.txPacket()
         if scs_comm_result != COMM_SUCCESS:
@@ -367,6 +391,9 @@ class ServoSupervisor(threading.Thread):
 
         # Clear syncwrite parameter storage
         self.packetHandler.groupSyncWrite.clearParam()
+
+        self.current_actions["positions"] = new_positions
+        self.current_actions["speeds"] = new_speeds
         return True
     
     def calculate_rad_to_int(self, sts_id, new_position):
@@ -413,14 +440,14 @@ class ServoSupervisor(threading.Thread):
                     action = self.action_queue.get()
                     if action is not None:
                         # Execute the action
-                        not self.send_command(action["positions"], action["speeds"])
+                        self.send_command(action["positions"], action["speeds"])
                         print("Action executed")
                         self.action_queue.task_done()
                 else:
                     # If no actions are available, update the states
                     start_time = time.time()
                     self.update_states()
-                    print(f"Time: {time.time()-start_time}")
+                    print(f"Time: {time.time()-start_time}") if self.showUpdates else None
                    # self.partial_update_states(send_pace)
                 
                 #show the current states
@@ -430,7 +457,7 @@ class ServoSupervisor(threading.Thread):
                     print(f"Time: {now_time-start_time}")
                     start_time = now_time
                     self.print_beautifullTable()
-            time.sleep(0.1)
+            #time.sleep(0.1)
 
     def close(self):
         self.no_close = False
@@ -442,18 +469,18 @@ class ServoSupervisor(threading.Thread):
 if __name__ == "__main__":
     # Usage example
     supervisor = ServoSupervisor()
-    getFunction = supervisor.create_get_informations(["All"])
-
-    supervisor.set_torque_state(4, True)
-    supervisor.set_torque_state(6, False)
+    getFunction = supervisor.create_get_informations(["Position"])
     supervisor.start_run()
     
+    for i in range(1,9):
+        supervisor.setTorque(scs_id=i, enable=False)
 
-    for i in range(10):
+    while True:
         # time.sleep(1)
         # supervisor.action_queue.put({"positions": [0]*8, "speeds": [4000]*8})
-        time.sleep(1)
         action_input = [0]*8
-        supervisor.action_queue.put({"positions": action_input, "speeds": [4000]*8})
-        print(action_input)
-        print(getFunction())
+        #supervisor.action_queue.put({"positions": action_input, "speeds": [4000]*8})
+        #output_angels = getFunction()
+        #diff = np.round(np.array(action_input) - np.array(output_angels[0]), 2)
+        time.sleep(0.5)
+        #print(f"{diff}  {output_angels}   {action_input}")

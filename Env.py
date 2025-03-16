@@ -121,12 +121,12 @@ class Simulation:
 
 
     def Sim_step(self):
-        
         self.rabbit.step(self.simulation_Timestep)
         
         for _ in range(int(self.simulation_Timestep/p.getPhysicsEngineParameters()["fixedTimeStep"])):
             if self.hung:
-                p.resetBasePositionAndOrientation(self.rabbit.id, self.rabbit.init_pos, [0, 0, 0, 1])
+                p.resetBasePositionAndOrientation(self.rabbit.id, [0,0, 0.5], [0, 0, 0, 1])
+            self.rabbit.render()
             p.stepSimulation()
         
         if self.simulationSpeed == "human":
@@ -142,13 +142,14 @@ class Simulation:
 
 if __name__ == "__main__":
     env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
-    env.rabbit.set_new_mass()
+    env.rabbit.add_DebugPanel()
+    #env.rabbit.set_new_mass()
     #env.rabbit.create_seperate_Window()
     #env.show_world_coordinate_system()
     #env.rabbit.add_UserControlPanel(all_joints=False)
-    env.rabbit.show_center_of_mass()
-    env.rabbit.get_link_infos()
-    time.sleep(10000)
+    #env.rabbit.get_link_infos()
+    #env.rabbit.show_center_of_mass()
+    #time.sleep(10000)
     # funktion = env.rabbit.create_get_informations(["joint_angles"])
     # env.rabbit.servoControler.set_torque_state(7, True)
     # env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
@@ -168,12 +169,12 @@ if __name__ == "__main__":
             # Send new command to the motors
             env.rabbit.send_motor_commands([2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
             env.Sim_step()
-            env.rabbit.show_center_of_mass()
+            #env.rabbit.show_center_of_mass()
             time.sleep(0.2)
         
         for i in range(100):
             # Send new command to the motors
             env.rabbit.send_motor_commands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
             env.Sim_step()
-            env.rabbit.show_center_of_mass()
+            #env.rabbit.show_center_of_mass()
             time.sleep(0.2)

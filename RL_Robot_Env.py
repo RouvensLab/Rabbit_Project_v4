@@ -29,8 +29,8 @@ class RL_Robot(RL_Base):
             from mesure_rabbt import get_measuredRabbit
             self.rabbit = get_measuredRabbit(Rabbit_real,
                                             state_types_body=["head_orientation"],
-                                            state_types_servos=["joint_angles", "joint_velocities"], 
-                                            trajectory_data_structure= ["joint_angles", "joint_velocities"]
+                                            state_types_servos=["joint_angles", "joint_velocities", "joint_torques"],
+                                            trajectory_data_structure= ["joint_angles", "joint_velocities", "joint_torques"],
                                                 )(simulation_Timestep=self.simulation_Timestep)
             #self.rabbit.create_seperate_Window()
         else:
@@ -166,10 +166,11 @@ class RL_Robot(RL_Base):
 if __name__ == "__main__":
     env = RL_Robot(RobotType="Rabbit_mesured")
     env.rabbit.create_seperate_Window()
+    env.rabbit.stop_all_motors()
     env.reset()
     for _ in range(100000):
         action = [0]*8#env.action_space.sample()
-        print(action)
+        #print(action)
         obs, rew, done, trunc, info = env.step(action)
         if done:
             env.reset()

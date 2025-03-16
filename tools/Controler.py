@@ -209,9 +209,9 @@ class ControlInput:
         pose_action = [0 for i in range(8)]
         left_vec = self.get_left_JoystickVector(normalize=False)
         pose_action[2] = left_vec[0]
-        pose_action[3] = left_vec[1]
+        pose_action[3] = -left_vec[1]
         pose_action[4] = left_vec[0]
-        pose_action[5] = left_vec[1]
+        pose_action[5] = -left_vec[1]
         pose_action[1], pose_action[0] = self.get_right_JoystickVector(normalize=False)
         pose_action[6], pose_action[7] = self.get_LRT_ButtonsVector(normalize=False)
 

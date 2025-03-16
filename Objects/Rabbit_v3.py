@@ -3,6 +3,14 @@ from collections import deque
 import math
 import pybullet as p
 from PySide6.QtGui import QGuiApplication
+import sys
+import os
+# Assuming Bunny_Project_v2 is the project root directory
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
+sys.path.append(project_root)
+
+from Objects.DebugWidget import DebugSlider, DebugButton, DebugSwitch
+
 
 class Rabbit:
     """A class to represent a rabbit in the simulation
@@ -27,6 +35,7 @@ class Rabbit:
         #UserControlPanel_added
         self.UserControlPanel_added = False
         self.UserSlider = []
+        self.UserButtons = []
 
         #Install the camera with the acceleration and orientation sensors at the head of the rabbit
         self.Camera_Link_id = 4
@@ -68,6 +77,7 @@ class Rabbit:
         #set the self collision of the robot
         #self.set_self_collision()
         self.lifetime = 0
+        self.simulation_Timestep = 0.1
         # Create a deque to hold (actions, time) tuples; maxlen=3 lets us compute acceleration.
         self.action_history = deque(maxlen=3)
 
@@ -80,7 +90,8 @@ class Rabbit:
     def set_new_mass(self):
         """Set new masses for every Bodypart (link) of the robot
         """
-        self.masses = {
+        new_total_mass = 1.1
+        self.rel_masses = {
             "Kopf": 0.121,
             "Vorderläufe": 0.024,
             "Oberkörper": 0.171,
@@ -100,12 +111,51 @@ class Rabbit:
 
         #set the mass of the links
         for body_part, links in body_parts.items():
-            mass = self.masses[body_part]
+            mass = self.rel_masses[body_part]
             for link, weight in links.items():
-                p.changeDynamics(self._id, link, mass=mass*weight)
+                p.changeDynamics(self._id, link, mass=mass*weight*new_total_mass)
         self.reset()
 
+    import pybullet as p
 
+    def show_center_of_mass(self):
+        """Show the center of mass of the robot"""
+        #self.change_Visibility(0.6)
+
+        original_link_masses = [0.07275, 0.04275, 0.04275, 0.0242, 0.0968, 0.012, 0.012, 0.04275, 0.04275, 0.07275, 0.024249999999999997, 0.062200000000000005, 0.0164, 0.0164, 0.0082, 0.0164, 0.0164, 0.0082, 0.062200000000000005, 0.062200000000000005, 0.062200000000000005, 0.062200000000000005, 0.07275, 0.024249999999999997]
+        robot_link_masses = [p.getDynamicsInfo(self._id, i)[0] for i in range(p.getNumJoints(self._id))]
+        
+        com1 = self.calculate_body_center_of_mass(link_masses=original_link_masses)
+        # Show the computed center of mass
+        #p.addUserDebugText("Center of Mass", com1, [0, 0, 1], 1, lifeTime=self.simulation_Timestep)
+        p.addUserDebugPoints([com1], [[0, 0, 1]], 5, lifeTime=self.simulation_Timestep+0.01)
+        com2 = self.calculate_body_center_of_mass()
+        # Show the computed center of mass
+        #p.addUserDebugText("Center of Mass", com2, [1, 1, 0], 1, lifeTime=self.simulation_Timestep)
+        p.addUserDebugPoints([com2], [[0, 1, 0]], 5, lifeTime=self.simulation_Timestep+0.01)
+
+        print("all LinkMass", [p.getDynamicsInfo(self._id, i)[0] for i in range(p.getNumJoints(self._id))])
+
+    
+
+    def calculate_body_center_of_mass(self, link_masses=None):
+        total_mass = 0.0
+        weighted_sum = [0.0, 0.0, 0.0]
+
+        for i in range(p.getNumJoints(self._id)):
+            link_info = p.getLinkState(self._id, i, computeForwardKinematics=True)
+            link_mass = link_masses[i] if link_masses is not None else p.getDynamicsInfo(self._id, i)[0]
+            link_world_pos = link_info[0]  # Center of mass in world coordinates
+
+            if link_mass > 0:  # Ignore massless links
+                total_mass += link_mass
+                weighted_sum = [weighted_sum[j] + link_mass * link_world_pos[j] for j in range(3)]
+
+        if total_mass > 0:
+            com = [x / total_mass for x in weighted_sum]
+        else:
+            com = [0, 0, 0]  # Default if no mass is found
+        return com
 
 
 
@@ -177,31 +227,7 @@ class Rabbit:
         for i in range(-1, p.getNumJoints(self._id)):
             p.changeVisualShape(self._id, i, rgbaColor=[1, 1, 1, visibility])
 
-    def show_center_of_mass(self):
-        """Show the center of mass of the robot
-        """
-        self.change_Visibility(0.6)
-        # Calculate the center of mass in the world coordinates
-        total_mass = 0
-        weighted_com_sum = np.array([0.0, 0.0, 0.0])
-        
-        for i in range(p.getNumJoints(self._id)):
-            link_info = p.getLinkState(self._id, i, computeLinkVelocity=True)
-            # Get the center of mass of the link in world coordinates
-            com = link_info[2]
-            # Get the mass of the link
-            mass = p.getDynamicsInfo(self._id, i)[0]
-            # Accumulate the weighted sum of the center of mass
-            weighted_com_sum += np.array(com) * mass
-            # Accumulate the total mass
-            total_mass += mass
-        
-        # Calculate the overall center of mass
-        com = weighted_com_sum / total_mass
-        
-        print("Center of Mass:", com)
-        #point at the center of mass
-        p.addUserDebugText("Center of Mass", com, [1, 0, 0], 1)
+
 
     def convert_12_to_8_motors(self, motors_12_value):
         """
@@ -510,7 +536,26 @@ class Rabbit:
                 self.UserSlider.append([p.addUserDebugParameter(f"Joint_{i}", -1, 1, 0)])
                 # Add a button to reset the position
             self.UserControlPanel_added = True
-        self.reset_button = p.addUserDebugParameter("Reset Position", 1, 0, 1)
+
+    def add_DebugPanel(self):
+        #Button to switch the focus on the robot
+        self.focus_Robot = False
+        self.UserButtons.append(DebugButton("Reset Position"))
+        self.UserButtons.append(DebugSwitch("Focus on Robot", 0))
+        self.UserButtons.append(DebugSwitch("Show Center of Mass", 0))
+        self.UserControlPanel_added = True
+
+    
+    def remove_UserControlPanel(self):
+        """Remove the User Control Panel
+        """
+        for i in self.UserSlider:
+            p.removeUserDebugItem(i[0])
+        self.UserSlider = []
+        for i in self.UserButtons:
+            i.remove()
+        self.UserButtons = []
+        self.UserControlPanel_added = False
 
         
 
@@ -524,45 +569,40 @@ class Rabbit:
             
         if self.UserControlPanel_added:
             """Check if the reset button is pressed and reset the position if it is"""
-            # Get the current state of the reset button
-            current_button_value = p.readUserDebugParameter(self.reset_button)
-            if not hasattr(self, "previous_button_value"):
-                self.previous_button_value = current_button_value
-            # Check if the button was pressed (value transition from 0 to 1)
-            if current_button_value > self.previous_button_value:
-                self.reset()  # Perform the reset action
-                print("Resetting position")
-            # Update previous button state for the next check
-            self.previous_button_value = current_button_value
+            if self.UserButtons[0].check_if_clicked():
+                self.reset()
+            #showing the center of mass
+            if self.UserButtons[2].check_if_on():
+                self.show_center_of_mass()
+
 
             """Execute the user commands"""
-            if len(self.UserSlider) == 8:
-                self.send_goal_pose([p.readUserDebugParameter(i[0]) for i in self.UserSlider])
-            elif len(self.UserSlider) == 12:
-                self.send_motor_commands([p.readUserDebugParameter(i[0]) for i in self.UserSlider])
-            else:
-                #Rais Error
-                raise ValueError("The number of sliders is not 8 or 12")
+            if not self.UserSlider == []:
+                if len(self.UserSlider) == 8:
+                    self.send_goal_pose([p.readUserDebugParameter(i[0]) for i in self.UserSlider])
+                elif len(self.UserSlider) == 12:
+                    self.send_motor_commands([p.readUserDebugParameter(i[0]) for i in self.UserSlider])
+                else:
+                    #Rais Error
+                    raise ValueError("The number of sliders is not 8 or 12")
 
 
             return True
         else:
             return False
         
-    def toogle_focus(self):
-        self.focus_Robot = not self.focus_Robot
-        return self.focus_Robot
-        
     def focus_on_robot(self):
         # Get the robot's current position and orientation
-        pos, orn = p.getBasePositionAndOrientation(self.robot)
+        pos, orn = p.getBasePositionAndOrientation(self.id)
         self.focus_pos.append(pos)
         self.focus_orn.append(p.getEulerFromQuaternion(orn))
         # Set the camera to look at the robot
         # Dynamically update the camera to follow the robot
         camera_distance = 0.5
-        camera_yaw = (np.mean([orn[2] for orn in self.focus_orn]))*180/math.pi
-        camera_pitch = -10
+        camera_z_yaw = 90 #in degrees
+        camera_pitch = -10 #in degrees
+        camera_yaw = camera_z_yaw + (np.mean([orn[1] for orn in self.focus_orn]))*180/math.pi#in degrees
+        print("camera_yaw:", camera_yaw)
         robot_pos = np.array(self.focus_pos).mean(axis=0)
         # print("camera_yaw:", camera_yaw)
         # print("robot_pos:", robot_pos)
@@ -577,13 +617,6 @@ class Rabbit:
 
             
 
-    def remove_UserControlPanel(self):
-        """Remove the User Control Panel
-        """
-        for i in self.UserSlider:
-            p.removeUserDebugItem(i[0])
-        self.UserSlider = []
-        self.UserControlPanel_added = False
 
     
     def step(self, step_time):
@@ -591,14 +624,12 @@ class Rabbit:
         step_time: the time that has passed since the last step (ms)
         """
         #update the lifetime
+        self.simulation_Timestep = step_time
         self.lifetime += step_time
 
         self.update_head_sensors()
 
         self.update_action_history(self.convert_12_to_8_motors([p.getJointState(self._id, i)[0] for i in self.Joints_index]))
-
-        if self.focus_Robot:
-            self.focus_on_robot()
 
         #check if the user overrides the motor commands
         if self.check_UserOverride():
@@ -607,7 +638,7 @@ class Rabbit:
 
 
         #remove the UserDebugTexts
-        p.removeAllUserDebugItems()
+        #p.removeAllUserDebugItems()
 
 
 
@@ -627,6 +658,14 @@ class Rabbit:
         #reset the head sensors
         self.update_head_sensors()
 
+    def render(self):
+        """Render the robot
+        """
+        if self.UserControlPanel_added:
+            if self.UserButtons[1].check_if_on():
+                self.focus_on_robot()
+
+        
 
 
     def calculate_foot_position(self, Motor1, knee_angle):

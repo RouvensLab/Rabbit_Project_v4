@@ -1,0 +1,56 @@
+DEC	HEX	Description	Size	Default	Memory	Access	Min	Max	Actual
+3	0x03	Model Number (L)	1	0	EPROM	R	0	255	
+4	0x04	Model Number (H)	1	0	EPROM	R	0	255	
+5	0x05	Servo ID	1	1	EPROM	RW	1	253	
+6	0x06	Baud Rate	1	1	EPROM	RW	0	7	
+7	0x07	Return Delay Time	1	250	EPROM	RW	0	254	
+8	0x08	Response Status Level	1	1	EPROM	RW	0	1	
+9	0x09	Min Angle Limit (L)	1	0	EPROM	RW	0	255	
+10	0x0A	Min Angle Limit (H)	1	0	EPROM	RW	0	255	
+11	0x0B	Max Angle Limit (L)	1	255	EPROM	RW	0	255	
+12	0x0C	Max Angle Limit (H)	1	15	EPROM	RW	0	255	
+13	0x0D	Max Temperature Limit	1	80	EPROM	RW	0	100	
+14	0x0E	Max Input Voltage	1	140	EPROM	RW	0	255	
+15	0x0F	Min Input Voltage	1	60	EPROM	RW	0	255	
+16	0x10	Max Torque (L)	1	255	EPROM	RW	0	255	
+17	0x11	Max Torque (H)	1	3	EPROM	RW	0	255	
+18	0x12	Phase	1	0	EPROM	RW	0	1	
+19	0x13	Unload Condition	1	0	EPROM	RW	0	1	
+20	0x14	LED Alarm	1	0	EPROM	RW	0	1	
+21	0x15	P Control	1	32	EPROM	RW	0	255	
+22	0x16	D Control	1	0	EPROM	RW	0	255	
+23	0x17	I Control	1	0	EPROM	RW	0	255	
+24	0x18	Min Start Force (L)	1	0	EPROM	RW	0	255	
+25	0x19	Min Start Force (H)	1	0	EPROM	RW	0	255	
+26	0x1A	Clockwise Deadband	1	2	EPROM	RW	0	255	
+27	0x1B	Counterclockwise Deadband	1	2	EPROM	RW	0	255	
+28	0x1C	Protection Current (L)	1	0	EPROM	RW	0	255	
+29	0x1D	Protection Current (H)	1	0	EPROM	RW	0	255	
+30	0x1E	Angular Correction	1	0	EPROM	RW	0	255	
+31	0x1F	OFS (L)	1	0	EPROM	RW	0	255	
+32	0x20	OFS (H)	1	0	EPROM	RW	0	255	
+33	0x21	Mode	1	0	EPROM	RW	0	1	
+34	0x22	Protection Torque	1	100	EPROM	RW	0	100	
+35	0x23	Protection Time	1	10	EPROM	RW	0	255	
+36	0x24	Overload Torque	1	100	EPROM	RW	0	100	
+40	0x28	Torque Enable	1	0	SRAM	RW	0	1	
+41	0x29	Acceleration Time	1	0	SRAM	RW	0	255	
+42	0x2A	Goal Position (L)	1	0	SRAM	RW	0	255	
+43	0x2B	Goal Position (H)	1	0	SRAM	RW	0	255	
+44	0x2C	Goal Time (L)	1	0	SRAM	RW	0	255	
+45	0x2D	Goal Time (H)	1	0	SRAM	RW	0	255	
+46	0x2E	Goal Speed (L)	1	0	SRAM	RW	0	255	
+47	0x2F	Goal Speed (H)	1	0	SRAM	RW	0	255	
+55	0x37	Lock	1	0	SRAM	RW	0	1	
+56	0x38	Present Position (L)	1	0	SRAM	R	0	255	
+57	0x39	Present Position (H)	1	0	SRAM	R	0	255	
+58	0x3A	Present Speed (L)	1	0	SRAM	R	0	255	
+59	0x3B	Present Speed (H)	1	0	SRAM	R	0	255	
+60	0x3C	Present Load (L)	1	0	SRAM	R	0	255	
+61	0x3D	Present Load (H)	1	0	SRAM	R	0	255	
+62	0x3E	Present Voltage	1	0	SRAM	R	0	255	
+63	0x3F	Present Temperature	1	0	SRAM	R	0	255	
+66	0x42	Moving	1	0	SRAM	R	0	1	
+69	0x45	Present Current (L)	1	0	SRAM	R	0	255	
+70	0x46	Present Current (H)	1	0	SRAM	R	0	255
+

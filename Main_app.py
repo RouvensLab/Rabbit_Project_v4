@@ -87,6 +87,7 @@ class ActionTimetableEditor(QMainWindow):
             self.time_step = self.RlEnv_param_kwargs["simulation_Timestep"]
             #from RL_Agent_Env import RL_Env
             self.RlEnv = RL_Env(**self.RlEnv_startup_parms, **self.RlEnv_param_kwargs)
+            self.RlEnv.simulation.rabbit.add_DebugPanel()
             self.RabbitMesure_widget = self.RlEnv.simulation.rabbit.create_GuiWidget()
             #self.RabbitMesure_widget.setParent(self)  # Ensure proper parent-child relationship
             self.RlEnv.reset()
