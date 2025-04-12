@@ -41,7 +41,7 @@ def normalize_series(series):
     return series / np.max(np.abs(series))
 
 # Main function to explore similarities and plot results
-def explore_similarity(total_current, total_current2, times):
+def explore_similarity(total_current, total_current2, times, title="Total Currents Comparison", labels=("osz_total_current", "servo_total_current"), x_label="Time (s)", y_label="Current (A)"):
     """
     Explore similarities between two time series using multiple metrics and visualize them.
     
@@ -49,6 +49,10 @@ def explore_similarity(total_current, total_current2, times):
     - total_current: First time series (e.g., oscilloscope total current)
     - total_current2: Second time series (e.g., servo total current)
     - times: Time array corresponding to both series
+    - title: Title for the plots
+    - labels: Tuple containing labels for the two series
+    - x_label: Label for the x-axis
+    - y_label: Label for the y-axis
     """
     # Ensure all arrays are the same length
     min_len = min(len(total_current), len(total_current2), len(times))
@@ -82,21 +86,21 @@ def explore_similarity(total_current, total_current2, times):
 
     # Subplot 1: Original series
     plt.subplot(2, 1, 1)
-    plt.plot(times, total_current, label="osz_total_current")
-    plt.plot(times, total_current2, label="servo_total_current")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Current (A)")
-    plt.title("Original Total Currents")
+    plt.plot(times, total_current, label=labels[0])
+    plt.plot(times, total_current2, label=labels[1])
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(f"Original {title}")
     plt.legend()
     plt.grid(True)
 
     # Subplot 2: Normalized series
     plt.subplot(2, 1, 2)
-    plt.plot(times, total_current_norm, label="osz_total_current (normalized)")
-    plt.plot(times, total_current2_norm, label="servo_total_current (normalized)")
-    plt.xlabel("Time (s)")
+    plt.plot(times, total_current_norm, label=f"{labels[0]} (normalized)")
+    plt.plot(times, total_current2_norm, label=f"{labels[1]} (normalized)")
+    plt.xlabel(x_label)
     plt.ylabel("Normalized Current")
-    plt.title("Normalized Total Currents")
+    plt.title(f"Normalized {title}")
     plt.legend()
     plt.grid(True)
 
@@ -107,11 +111,11 @@ def explore_similarity(total_current, total_current2, times):
     deriv1 = np.gradient(total_current, times)
     deriv2 = np.gradient(total_current2, times)
     plt.figure(figsize=(8, 4))
-    plt.plot(times, deriv1, label="d(osz_total_current)/dt")
-    plt.plot(times, deriv2, label="d(servo_total_current)/dt")
-    plt.xlabel("Time (s)")
+    plt.plot(times, deriv1, label=f"d({labels[0]})/dt")
+    plt.plot(times, deriv2, label=f"d({labels[1]})/dt")
+    plt.xlabel(x_label)
     plt.ylabel("Rate of Change")
-    plt.title("Derivatives of Total Currents")
+    plt.title(f"Derivatives of {title}")
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -124,19 +128,28 @@ if __name__ == "__main__":
     from Trajectory import TrajectoryRecorder
 
     Trajectory_Base = TrajectoryRecorder()
-    Trajectory_Base.load_trajectory("Trajectory1")
+    Trajectory_Base.load_trajectory("Bew3")
     keys = Trajectory_Base.get_keys()
     values = Trajectory_Base.get_values()
-    times = Trajectory_Base.get_times()
+    times1 = Trajectory_Base.get_times()
 
-    total_current = np.array(Trajectory_Base.get_keyValues("total_current"))[:, 0]
-    joints_currents = Trajectory_Base.get_keyValues("joint_currents")  # list with list of joint currents
-    total_current2 = np.array(joints_currents).sum(axis=1)
-
-    # Smooth the data as in your original code
-    total_current = np.convolve(total_current, np.ones(5)/5, mode="valid")
-    total_current2 = np.convolve(total_current2, np.ones(5)/5, mode="valid")
-    times = times[:len(total_current)]  # Adjust times to match smoothed data
-
+    Trajectory_Base2 = TrajectoryRecorder()
+    Trajectory_Base2.load_trajectory("Trajectory1")
+    times2 = Trajectory_Base2.get_times()
+    total_current = np.array(Trajectory_Base2.get_keyValues("total_current"))[:, 0]
+    # joints_currents = np.array(Trajectory_Base.get_keyValues("joint_torques"))  # list with list of joint currents
+    # total_current2 = np.absolute(np.sum(joints_currents, axis=1))/12  # sum of all joint currents
+    joints_currents = np.array(Trajectory_Base2.get_keyValues("joint_currents"))  # list with list of joint currents
+    wechsel = 1024*0.0065
+    new_joints_currents = np.where(joints_currents > wechsel, -(joints_currents-wechsel), joints_currents)
+    total_current2 = np.absolute(np.sum(new_joints_currents, axis=1))
+    
+    print(total_current2)
+    print(total_current)
+    print(times1)
+    print(times2)
+    #make both time arrays the same length
+    times1 = times1[:len(total_current2)]
+    times2 = times2[:len(total_current2)]
     # Call the function
-    explore_similarity(total_current, total_current2, times)
+    explore_similarity(total_current, total_current2, times2)

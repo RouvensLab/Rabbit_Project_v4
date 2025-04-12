@@ -23,13 +23,12 @@ class Rabbit_real:
         #get the names of the joints
         self.Joints_index = [1, 2,   3, 5,   4, 6,   7, 8]
         #self.Joint_correction = [-0.05, 0.05,   0.1, 0,   0.1, 0.15,   0, -0.06]
-        self.Joint_correction = [-0.015, 0,   0, 0.02,   0.015, 0,   0.03, -0.03]
+        self.Joint_correction = [-0.03, 0,   0, 0.02,   0.015, 0,   0.03, -0.03]
         self.numMotors = 8
 
         self.servoControler = ServoSupervisor(servo_id_order=self.Joints_index)
         self.servoControler.start_run()
        
-   
         time.sleep(4)
         print(self.servoControler.load)
 
@@ -139,6 +138,13 @@ class Rabbit_real:
 
                 
                 ]
+    
+    def convert_to_order(self, list, order_index):
+        """Convert the list to the order of the order_index"""
+        if len(list) != len(order_index):
+            raise ValueError("The list and the order_index have to have the same length")
+        return [list[i] for i in order_index]
+    
         
 
 
@@ -163,7 +169,8 @@ class Rabbit_real:
                 lambda_list.append(lambda: self.get_head_sensors()[2])
             elif state_type in joint_types:
                 transformed_state_type = trans_types[joint_types.index(state_type)]
-                left_joint_types.append(transformed_state_type)
+                #left_joint_types.append(transformed_state_type)
+                #lambda_list.append(lambda servo_data = : self.convert_to_order(self.servoControler.create_get_inf(transformed_state_type), np.array(self.Joints_index)-1))
                 lambda_list.append(self.servoControler.create_get_inf(transformed_state_type))
             elif "total_current" in state_type:
                 lambda_list.append(lambda: [self.get_total_current(), 0, 0])
@@ -316,8 +323,7 @@ class Rabbit_real:
         #self.servoControler.get_Sync_ServosInfo()#updates the servo information
 
         #update action rate
-        self.update_action_history(self.servoControler.get_ServoStates("Position"))# not quiet right. Because servo 1 and 2 are not the same as the one in the simulation
-        self.servoControler.update_servoStates()
+        self.update_action_history(self.servoControler.get_ServoStates("Position"))# not quiet right. Because servo 1 and 2 are not the same as the one in the simulation)
 
 
 

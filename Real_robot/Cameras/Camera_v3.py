@@ -15,6 +15,7 @@ class Camera:
 
         self.accelerometer_data = None
         self.cam_data = None  # Store the latest video frame
+        self.initial_orientation = np.array([0, 0, 0])
         
         # Initialize WebSocket for IMU data
         self.ws = websocket.WebSocketApp(
@@ -36,29 +37,47 @@ class Camera:
 
     # Stream cameras
     def stream_camera(self):
-        while True:
-            try:
-                response = requests.get(self.cam_url, stream=True)
-                if response.status_code == 200:
-                    bytes_data = bytes()
-                    for chunk in response.iter_content(chunk_size=1024):
-                        bytes_data += chunk
-                        a = bytes_data.find(b'\xff\xd8')
-                        b = bytes_data.find(b'\xff\xd9')
-                        if a != -1 and b != -1:
-                            jpg = bytes_data[a:b+2]
-                            bytes_data = bytes_data[b+2:]
-                            img = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-                            if img is not None:
-                                self.cam_data = img
-                                print(f"Frame received: shape={img.shape}")
-                else:
-                    #print(f"Failed to connect to camera stream: {response.status_code}")
-                    pass
-            except requests.RequestException as e:
-                #print(f"Error fetching camera stream: {e}")
-                pass
-            time.sleep(0.1)  # Add a short delay to avoid excessive requests
+        # while True:
+        #     try:
+        #         response = requests.get(self.cam_url, stream=True)
+        #         if response.status_code == 200:
+        #             bytes_data = bytes()
+        #             for chunk in response.iter_content(chunk_size=1024):
+        #                 bytes_data += chunk
+        #                 a = bytes_data.find(b'\xff\xd8')
+        #                 b = bytes_data.find(b'\xff\xd9')
+        #                 if a != -1 and b != -1:
+        #                     jpg = bytes_data[a:b+2]
+        #                     bytes_data = bytes_data[b+2:]
+        #                     img = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+        #                     if img is not None:
+        #                         self.cam_data = img
+        #                         #print(f"Frame received: shape={img.shape}")
+        #         else:
+        #             #print(f"Failed to connect to camera stream: {response.status_code}")
+        #             pass
+        #     except requests.RequestException as e:
+        #         #print(f"Error fetching camera stream: {e}")
+        #         pass
+        #     time.sleep(0.1)  # Add a short delay to avoid excessive requests
+        try:
+            response = requests.get(self.cam_url, stream=True)
+            if response.status_code == 200:
+                bytes_data = bytes()
+                for chunk in response.iter_content(chunk_size=1024):
+                    bytes_data += chunk
+                    a = bytes_data.find(b'\xff\xd8')  # JPEG start marker
+                    b = bytes_data.find(b'\xff\xd9')  # JPEG end marker
+                    if a != -1 and b != -1:
+                        jpg = bytes_data[a:b+2]
+                        bytes_data = bytes_data[b+2:]
+                        img = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if img is not None:
+                            self.cam_data = img
+            else:
+                print(f"Failed to connect to camera stream: {response.status_code}")
+        except requests.RequestException as e:
+            print(f"Error fetching camera stream: {e}")
 
     def on_error(self, _, error):
         print(f"WebSocket Error: {error}")
@@ -70,6 +89,21 @@ class Camera:
         print("WebSocket connection opened")
 
 
+    def euler_to_rotation_matrix(self, euler):
+        """Convert Euler angles (roll, pitch, yaw) to a rotation matrix (sensor to world)."""
+        roll, pitch, yaw = euler
+        cr = np.cos(roll)
+        sr = np.sin(roll)
+        cp = np.cos(pitch)
+        sp = np.sin(pitch)
+        cy = np.cos(yaw)
+        sy = np.sin(yaw)
+        R = np.array([
+            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+            [-sp, cp * sr, cp * cr]
+        ])
+        return R
 
     def get_accelerometer_data(self, dt=0.01):
         """Returns the latest orientation (rad), angular velocity (rad/s), and linear acceleration (m/s²).
@@ -79,55 +113,80 @@ class Camera:
         
         Returns:
             tuple: (orientation (rad), angular_velocity (rad/s), linear_acceleration (m/s²))
+                All quantities are in the world frame, compatible with PyBullet.
         """
         if self.accelerometer_data is None:
-            return None, None, None
+            return np.array([0, 0, 0]), np.array([0, 0, 0]), np.array([0, 0, 0])
 
         # Extract raw sensor values
         ax, ay, az = self.accelerometer_data["ax"], self.accelerometer_data["ay"], self.accelerometer_data["az"]
         gx, gy, gz = self.accelerometer_data["gx"], self.accelerometer_data["gy"], self.accelerometer_data["gz"]
         mx, my, mz = self.accelerometer_data["mx"], self.accelerometer_data["my"], self.accelerometer_data["mz"]
 
-        # Convert accelerometer readings from g to m/s² (1g ≈ 9.81 m/s²)
-        linear_acceleration = np.array([ax, ay, az]) * 9.81
+        # Convert units
+        linear_acceleration_sensor = np.array([ax, ay, az]) * 9.81  # g to m/s², sensor frame
+        angular_velocity_sensor = np.radians([gx, gy, gz])          # deg/s to rad/s, sensor frame
 
-        # Convert gyroscope readings from degrees/s to radians/s
-        angular_velocity = np.radians([gx, gy, gz])
+        # Estimate roll and pitch from accelerometer
+        roll = np.arctan2(ay, np.sqrt(ax**2 + az**2))
+        pitch = np.arctan2(-ax, np.sqrt(ay**2 + az**2))
 
-        # Estimate roll (ϕ) and pitch (θ) using accelerometer
-        roll = np.arctan2(ay, np.sqrt(ax**2 + az**2))  # Rotation around X-axis
-        pitch = np.arctan2(-ax, np.sqrt(ay**2 + az**2))  # Rotation around Y-axis
-
-        # Tilt-compensated yaw (ψ) calculation using magnetometer
-        # Step 1: Normalize magnetometer readings
+        # Normalize magnetometer readings
         mag_norm = np.sqrt(mx**2 + my**2 + mz**2)
-        if mag_norm == 0:  # Avoid division by zero
+        if mag_norm == 0:
             mx, my, mz = 0, 0, 0
         else:
             mx, my, mz = mx / mag_norm, my / mag_norm, mz / mag_norm
 
-        # Step 2: Apply tilt compensation
+        # Tilt-compensated yaw from magnetometer
         mag_x = mx * np.cos(pitch) + mz * np.sin(pitch)
         mag_y = mx * np.sin(roll) * np.sin(pitch) + my * np.cos(roll) - mz * np.sin(roll) * np.cos(pitch)
-        
-        yaw = np.arctan2(mag_y, mag_x)  # Rotation around Z-axis
+        yaw = np.arctan2(mag_y, mag_x)
 
-        # Step 3: Gyroscope Integration (Optional: Use Kalman/Madgwick Filter for better results)
-        if hasattr(self, "previous_orientation"):  # Integrate if previous data exists
-            gyro_roll = self.previous_orientation[0] + angular_velocity[0] * dt
-            gyro_pitch = self.previous_orientation[1] + angular_velocity[1] * dt
-            gyro_yaw = self.previous_orientation[2] + angular_velocity[2] * dt
+        orientation_abs = np.array([roll, pitch, yaw])  # Absolute orientation (rad), sensor frame
+        orientation_rel = np.array([roll, pitch, yaw]) - self.initial_orientation  # Relative orientation (rad), sensor frame
+        orientation_rel = np.mod(orientation_rel + np.pi, 2 * np.pi) - np.pi  # Normalize to [-pi, pi]
 
-            # Complementary filter (95% gyro, 5% accelerometer/magnetometer)
-            roll = 0.95 * gyro_roll + 0.05 * roll
-            pitch = 0.95 * gyro_pitch + 0.05 * pitch
-            yaw = 0.95 * gyro_yaw + 0.05 * yaw
+        # Apply complementary filter if previous orientation exists
+        if hasattr(self, "previous_orientation"):
+            gyro_roll = self.previous_orientation[0] + angular_velocity_sensor[0] * dt
+            gyro_pitch = self.previous_orientation[1] + angular_velocity_sensor[1] * dt
+            gyro_yaw = self.previous_orientation[2] + angular_velocity_sensor[2] * dt
+            orientation_abs = 0.95 * np.array([gyro_roll, gyro_pitch, gyro_yaw]) + 0.05 * orientation_abs
 
-        self.previous_orientation = np.array([roll, pitch, yaw])  # Store for next iteration
+        self.previous_orientation = orientation_abs
 
-        orientation = np.array([roll, pitch, yaw])  # Orientation in radians
+        # Convert orientation to rotation matrix
+        R = self.euler_to_rotation_matrix(orientation_abs)
 
-        return orientation, angular_velocity, linear_acceleration
+        # Transform angular velocity to world frame
+        angular_velocity_world = R @ angular_velocity_sensor
+
+        # Transform linear acceleration to world frame, adjusting for gravity
+        g_world = np.array([0, 0, -9.81])  # Gravity in world frame (Z-up)
+        linear_acceleration_world = R @ linear_acceleration_sensor + g_world
+
+        return orientation_rel, angular_velocity_world, linear_acceleration_world, orientation_abs
+    
+    def set_initial_orientation(self):
+        """Sets the initial orientation of the camera."""
+        while self.accelerometer_data is None:
+            # Wait for accelerometer data to be available
+            time.sleep(0.5)
+            print("Waiting for accelerometer data...")
+        if self.accelerometer_data is not None:
+            roll, pitch, yaw = self.get_accelerometer_data()[3]
+            self.initial_orientation = np.array([roll, pitch, yaw])
+            print(f"Initial orientation set: {self.initial_orientation}")
+        else:
+            print("No accelerometer data available to set initial orientation. Despite waiting.")
+
+    def get_relative_data(self):
+        """Returns the relative orientation of the camera with respect to the initial orientation."""
+        relative_orientation, angular_vel_world, linear_acc_world, orn_abs = self.get_accelerometer_data()
+        return relative_orientation, angular_vel_world, linear_acc_world
+
+
 
 
     def get_frame(self):
@@ -161,10 +220,23 @@ class Camera:
 if __name__ == "__main__":
     # Usage example
     camera = Camera()
+    camera.set_initial_orientation()
 
     # Get accelerometer data
     #data = camera.get_accelerometer_data()
     #print("Accelerometer Data:", data)
 
     # Start camera stream
-    camera.show_cam_stream()
+    #camera.show_cam_stream()$
+    while True:
+        #clear print
+        print("\033c", end="")
+        # print(np.array(camera.get_accelerometer_data()), 3)
+        #rounding to 3 decimal places
+        print(np.array(camera.get_relative_data()[0]*180/np.pi).round(1))
+        print(np.array(camera.get_relative_data()[1]*180/np.pi).round(1))
+        print(camera.get_relative_data()[2].round(3))
+
+        time.sleep(0.1)
+
+        

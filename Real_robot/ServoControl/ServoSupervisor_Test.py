@@ -73,7 +73,7 @@ class ServoSupervisor(threading.Thread):
         self.mobile_sign = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0}
         self.current = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0}
         
-
+        self.allPinged = [False]*8
 
         self.servo_state_structure = {
             "Position": [0, 0, SMS_STS_PRESENT_POSITION_L, 2, [0, 4094, 0, 2*math.pi]], 
@@ -103,13 +103,12 @@ class ServoSupervisor(threading.Thread):
         # make first update
 
     #region RUN
-    def run(self, send_pace=0.001):
-        print("Starting servo supervisor thread")
-     
+    def run(self):
+        #print("Starting servo supervisor thread")
         
-        cycle_time = 0.2
+        cycle_time = 0.07
         while self.no_close:
-            acttime = time.time()   
+            acttime = time.time()
             
 
             # while not self.pause:
@@ -121,16 +120,19 @@ class ServoSupervisor(threading.Thread):
                         #print(f"Instruction {action['type']} executed, result: {result}")
                     self.action_queue.task_done()
             else:
-                pass
-            #print(f"Update time: {time.time() - start_time}")
-            self.action_queue.put({"type": INST_SYNC_READ, "servo_id": self.servoIDs, "address": SMS_STS_PRESENT_POSITION_L, "length": 6})
+                #print(f"Update time: {time.time() - start_time}")
+                if all(self.allPinged):
+                    self.action_queue.put({"type": INST_SYNC_READ, "servo_id": self.servoIDs, "address": SMS_STS_PRESENT_POSITION_L, "length": 6})
+            
             while not self.feedback_queue.empty():
                 feedback = self.feedback_queue.get()
-                if isinstance(feedback.get("result"), dict) and len(feedback.get('result')) == 8:
-                    # print(f"Feedback: {feedback.get('result')[7]}")
-                    print(f"Feedbac2: {self.load[7]}")
+                # if isinstance(feedback.get("result"), dict) and len(feedback.get('result')) == 8:
+                #     # print(f"Feedback: {feedback.get('result')[7]}")
+                #     print(f"Feedbac2: {self.load[7]}")
+            acttime2 = time.time()
+            #print(f"Cycle time: {(acttime2 - acttime)*1000} ms")
             while time.time() - acttime < cycle_time:
-                time.sleep(0.005)
+                time.sleep(0.001)
         print("Servo supervisor thread terminated")
 
 
@@ -177,16 +179,22 @@ class ServoSupervisor(threading.Thread):
     def absolute_to_pos_neg(self, array: np.ndarray, wechsel=1000):
         return np.where(array > wechsel, -(array-wechsel), array)
     
+    def convert_to_order(self, list, order_index):
+        """Convert the list to the order of the order_index"""
+        if len(list) != len(order_index):
+            raise ValueError("The list and the order_index have to have the same length")
+        return [list[i-1] for i in order_index]
+    
     def create_get_inf(self, state_type):
         if state_type == "Position":
             self.add_dataType(state_type)
-            lambda_func = lambda: np.array(list(self.position.values()))
+            lambda_func = lambda: self.convert_to_order(np.array([self.calculate_int_to_rad(i, value) for i, value in self.position.items()]), [1, 2,   3, 5,   4, 6,   7, 8])
         elif state_type == "Velocity":
             self.add_dataType(state_type)
-            lambda_func = lambda: self.absolute_to_pos_neg(np.array(list(self.speed.values())), wechsel=32766)
+            lambda_func = lambda: self.convert_to_order(self.absolute_to_pos_neg(np.array(list(self.speed.values())), wechsel=32766)/4096*2*math.pi, [1, 2,   3, 5,   4, 6,   7, 8])
         elif state_type == "Load":
             self.add_dataType(state_type)
-            lambda_func = lambda: self.absolute_to_pos_neg(np.array(list(self.load.values())), wechsel=1024)*0.1
+            lambda_func = lambda: self.convert_to_order(self.absolute_to_pos_neg(np.array(list(self.load.values())), wechsel=1024)*0.1, [1, 2,   3, 5,   4, 6,   7, 8])
         elif state_type == "Voltage":
             self.add_dataType(state_type)
             lambda_func = lambda: self.absolute_to_pos_neg(np.array(self.Data_Stack[state_type]))*0.1
@@ -230,65 +238,6 @@ class ServoSupervisor(threading.Thread):
         if data_type in self.upToDate_dataTypes:
             self.upToDate_dataTypes.remove(data_type)
             self.Data_Stack.pop(data_type)
-
-    def update_singel_state(self, dataType, scs_id):
-        if not self.packetHandler:
-            return None
-            
-        if dataType == "Position":
-            data, sts_comm_result, sts_error = self.packetHandler.ReadPos(scs_id)
-        elif dataType == "Velocity":
-            data, sts_comm_result, sts_error = self.packetHandler.ReadSpeed(scs_id)
-        elif dataType == "Load":
-            data, sts_comm_result, sts_error = self.packetHandler.ReadLoad(scs_id)
-        elif dataType == "Voltage":
-            data, sts_comm_result, sts_error = self.packetHandler.ReadVoltage(scs_id)
-        elif dataType == "Current":
-            data, sts_comm_result, sts_error = self.packetHandler.ReadCurrent(sts_id=scs_id)
-        elif dataType == "Temperature":
-            data, sts_comm_result, sts_error = self.packetHandler.ReadTemperature(sts_id=scs_id)
-        elif dataType == "TorqueEnable":
-            data, sts_comm_result, sts_error = self.packetHandler.read1ByteTxRx(
-                scs_id, self.servo_state_structure["TorqueEnable"][2])
-        elif dataType == "MobileSign":
-            data, sts_comm_result, sts_error = self.packetHandler.ReadMoving(sts_id=scs_id)
-        else:
-            print(f"Error: Unknown data type {dataType}")
-            return None
-        
-        if sts_comm_result != COMM_SUCCESS:
-            print(f"Error reading {dataType} from servo {scs_id}: {self.packetHandler.getTxRxResult(sts_comm_result)}")
-            return None
-        return data
-
-    def update_states(self):
-        if not self.packetHandler:
-            print("Error: Packet handler not initialized")
-            return
-        for dataType in self.upToDate_dataTypes:
-            for index, scs_id in enumerate(self.servoIDs):
-                data = self.update_singel_state(dataType, scs_id)
-                if data is not None:
-                    self.Data_Stack[dataType][index] = data
-    
-    def partial_update_states(self, time_for_update=0.1):
-        if len(self.upToDate_dataTypes) == 0 or len(self.servoIDs) == 0:
-            print("Error: No data types or servos to read from")
-            return
-        
-        used_time_for_one_update = 0.016
-        number_of_updates = int(time_for_update/used_time_for_one_update)
-        for i in range(number_of_updates):
-            data_type = self.upToDate_dataTypes[self.parti_Update_state % len(self.upToDate_dataTypes)]
-            scs_id = self.servoIDs[self.parti_Update_state % len(self.servoIDs)]
-            index = self.parti_Update_state % len(self.servoIDs)
-            data = self.update_singel_state(data_type, scs_id)
-            if data is not None:
-                self.Data_Stack[data_type][index] = data
-            self.parti_Update_state += 1
-
-        if self.parti_Update_state >= len(self.servoIDs)*len(self.upToDate_dataTypes):
-            self.parti_Update_state = 0
             
     def setTorque(self, scs_id, enable=True):
         if enable:
@@ -300,6 +249,12 @@ class ServoSupervisor(threading.Thread):
         return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
     def send_command(self, new_positions, new_speeds):
+        """
+        new_positions: A list of new positions for the servos. The new positions must be in radians
+        new_speeds: A list of new speeds for the servos. The new speeds must be in rad/s
+
+        return: True if the new command is different from the previous command
+        """
         if len(new_positions) != len(self.servoIDs) or len(new_speeds) != len(self.servoIDs):
             print("Error: Number of positions and speeds must match number of servos")
             return False
@@ -310,15 +265,16 @@ class ServoSupervisor(threading.Thread):
 
        
         #self.packetHandler.groupSyncWrite = GroupSyncWrite(self.portHandler, self.packetHandler, self.ADDR_STS_GOAL_POSITION, 4)
-        self.packetHandler.groupSyncWrite = GroupSyncWrite(self.packetHandler, self.ADDR_STS_GOAL_POSITION, 4)
+        #self.packetHandler.groupSyncWrite = GroupSyncWrite(self.packetHandler, self.ADDR_STS_GOAL_POSITION, 4)
 
         for index, scs_id in enumerate(self.servoIDs):
             if self.current_actions["torque"][index] == 1:
                 position = self.calculate_rad_to_int(scs_id, new_positions[index])
                 speed = int(abs(new_speeds[index]))
-                param = [SCS_LOBYTE(position), SCS_HIBYTE(position), 
-                        SCS_LOBYTE(speed), SCS_HIBYTE(speed)]
-                scs_addparam_result = self.packetHandler.groupSyncWrite.addParam(scs_id, param)
+                # param = [SCS_LOBYTE(position), SCS_HIBYTE(position), 
+                #         SCS_LOBYTE(speed), SCS_HIBYTE(speed)]
+                #scs_addparam_result = self.packetHandler.groupSyncWrite.addParam(scs_id, param)
+                scs_addparam_result = self.packetHandler.SyncWritePosEx(scs_id, position, speed, self.SCS_MOVING_ACC)
                 if not scs_addparam_result:
                     print(f"[ID:{scs_id:03d}] groupSyncWrite addparam failed") if self.showErrors else None
 
@@ -370,10 +326,14 @@ class ServoSupervisor(threading.Thread):
             if result == COMM_SUCCESS:
                 self.feedback_queue.put({"type": INST_PING, "instruction": instruction, "result": True})
                 self.servo_pres[scs_id] = True
+
+                self.allPinged[scs_id-1] = True
                 return True
             else:
                 self.feedback_queue.put({"type": INST_PING, "instruction": instruction, "result": False})
                 self.servo_pres[scs_id] = False
+
+                self.allPinged[scs_id-1] = True
                 return False
 
         elif inst_type == INST_READ:

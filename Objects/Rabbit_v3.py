@@ -12,6 +12,13 @@ sys.path.append(project_root)
 from Objects.DebugWidget import DebugSlider, DebugButton, DebugSwitch
 
 
+# TODO:
+# - [ ] Add a function to give the robots joints a backlash (like in the real robot)
+# - [ ] Messure the real robots jointsvelocity and acceleration and apply them to the simulation
+# - [ ] calculating the inverse kinematics with velocity of backlegs
+
+
+
 class Rabbit:
     """A class to represent a rabbit in the simulation
 
@@ -52,8 +59,9 @@ class Rabbit:
         self.MAXFORCE = 2.9  #2.9#2.941995#5#in Newton   3 N/m
         self.MAXVELOCITY = (2*math.pi)/(0.222*6)#in rad/s
         self.ACCELERATION = 8.79/180*math.pi#8.79 #(degrees/ s^2) by 7.4 v
-        self.Motors_strength = [self.MAXFORCE for i in range(self.numMotors)]
-        self.Motors_velocity = [self.MAXVELOCITY for i in range(self.numMotors)]
+        # self.Motors_strength = [self.MAXFORCE for i in range(self.numMotors)]
+        # self.Motors_velocity = [self.MAXVELOCITY for i in range(self.numMotors)]
+        self.ACT_knee_speeds = True #if the knee joints should be controlled by the speed of the motors or not. If not, they are set to 0.
         
         #get the range of the motors
         #self.joint_ranges = [p.getJointInfo(self._id, i)[8:10] for i in self.Motors_index]
@@ -128,15 +136,14 @@ class Rabbit:
         com1 = self.calculate_body_center_of_mass(link_masses=original_link_masses)
         # Show the computed center of mass
         #p.addUserDebugText("Center of Mass", com1, [0, 0, 1], 1, lifeTime=self.simulation_Timestep)
-        p.addUserDebugPoints([com1], [[0, 0, 1]], 5, lifeTime=self.simulation_Timestep+0.01)
+        p.addUserDebugPoints([com1], [[0, 0, 1]], 15, lifeTime=self.simulation_Timestep+0.01)
         com2 = self.calculate_body_center_of_mass()
         # Show the computed center of mass
         #p.addUserDebugText("Center of Mass", com2, [1, 1, 0], 1, lifeTime=self.simulation_Timestep)
-        p.addUserDebugPoints([com2], [[0, 1, 0]], 5, lifeTime=self.simulation_Timestep+0.01)
+        p.addUserDebugPoints([com2], [[0, 1, 0]], 15, lifeTime=self.simulation_Timestep+0.01)
 
         print("all LinkMass", [p.getDynamicsInfo(self._id, i)[0] for i in range(p.getNumJoints(self._id))])
 
-    
 
     def calculate_body_center_of_mass(self, link_masses=None):
         total_mass = 0.0
@@ -485,6 +492,12 @@ class Rabbit:
         action_acceleration = (rate2 - rate1) / dt_rate
         return action_acceleration
     
+    def calculate_kneeJoints_speeds(self):
+        """Calculates the speed of the knee joint depending on the speed of the motor 1 (upper Leg)"""
+        new_speed_kneeLeft = self.MAXVELOCITY - p.getJointState(self._id, self.Joints_index[4])[1]
+        new_speed_kneeRight = self.MAXVELOCITY - p.getJointState(self._id, self.Joints_index[7])[1]
+        return new_speed_kneeLeft, new_speed_kneeRight
+    
     def send_goal_pose(self, pose_positions, range=[-1, 1]):
         """
         This sends the goal pose to the robot. The default range is from -1 to 1
@@ -514,8 +527,14 @@ class Rabbit:
         """
         # print("motor_commands 12 Dimensions:", motor_commands)
         # print("motor_commands 8 Dimensions:", self.convert_12_to_8_motors(motor_commands))
-        for i, position in zip(self.Joints_index, motor_commands):
-            p.setJointMotorControl2(self._id, i, p.POSITION_CONTROL, targetPosition=position, force=self.MAXFORCE, maxVelocity=self.MAXVELOCITY)
+        velocities = [self.MAXVELOCITY for i in range(len(self.Joints_index))]
+        if self.ACT_knee_speeds:
+            knee_speed_Left, knee_speed_Right = self.calculate_kneeJoints_speeds()
+            velocities[5] = knee_speed_Left
+            velocities[8] = knee_speed_Right
+
+        for i, [joint_index, position] in enumerate(zip(self.Joints_index, motor_commands)):
+            p.setJointMotorControl2(self._id, joint_index, p.POSITION_CONTROL, targetPosition=position, force=self.MAXFORCE, maxVelocity=velocities[i])
 
     def set_other_joints_to_passive(self):
         """Set all the other joints to passive
@@ -679,16 +698,6 @@ class Rabbit:
         """
         foot_angle = -knee_angle
         return foot_angle
-
-
-    def get_kneeJoint_inverse_kinematics(self, Motor1_angel, Motor2_angle):
-        """Calculate the inverse kinematics for the knee joint
-        Motor1: the position of the motor 1
-        Motor2: the position of the motor 2
-        return: the position of the knee joints
-        """
-        
-        #return kneeJoint_angle
 
     def _map(self, x, in_min, in_max, out_min, out_max):
         """Map a value from one range to another

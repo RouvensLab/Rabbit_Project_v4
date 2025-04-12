@@ -36,27 +36,29 @@ from ExploreSimilarities import explore_similarity
 
 # show_diff(times1, joint_angles1, joint_angles2, "Joint angles of the oscilloscope and the servos", "Time in s", "Joint angles in rad", "osz_joint_angles", "servo_joint_angles")
 
-
+#simulation
+servo_id = 2
 Trajectory_Base = TrajectoryRecorder()
-Trajectory_Base.load_trajectory("RealJump_current_v1")
+Trajectory_Base.load_trajectory("Bew2")
 keys1 = Trajectory_Base.get_keys()
 values1 = Trajectory_Base.get_values()
 times1 = Trajectory_Base.get_times()
-total_current = np.array(Trajectory_Base.get_keyValues("total_current"))[:, 0]
-joint_angels = np.array(Trajectory_Base.get_keyValues("joint_angles"), dtype=float)[:, 0]
-joint_velocities = np.array(Trajectory_Base.get_keyValues("joint_velocities"), dtype=float)[:, 0]
-power1 = total_current * 12.2#v
+# total_current = np.array(Trajectory_Base.get_keyValues("total_current"))[:, 0]
+joint_angels = np.array(Trajectory_Base.get_keyValues("joint_angles"), dtype=float)[:, servo_id]
+joint_velocities = np.array(Trajectory_Base.get_keyValues("joint_velocities"), dtype=float)[:, servo_id]
+joint_torque1 = np.array(Trajectory_Base.get_keyValues("joint_torques"))[:, servo_id]
+joint_power1 =  np.absolute(joint_torque1)
 
+#real robot
 Trajectory_Base2 = TrajectoryRecorder()
-Trajectory_Base2.load_trajectory("SimJump_current_v1")
+Trajectory_Base2.load_trajectory("Bew3")
 keys2 = Trajectory_Base2.get_keys()
 values2 = Trajectory_Base2.get_values()
 times2 = Trajectory_Base2.get_times()
-joint_angels2 = np.array(Trajectory_Base2.get_keyValues("joint_angles"), dtype=float)[:, 0]
-joint_vel2 = np.array(Trajectory_Base2.get_keyValues("joint_velocities"), dtype=float)[:, 0]
-joint_torque2 = np.array(Trajectory_Base2.get_keyValues("joint_torques"))
+joint_angels2 = np.array(Trajectory_Base2.get_keyValues("joint_angles"), dtype=float)[:, servo_id]
+joint_vel2 = np.array(Trajectory_Base2.get_keyValues("joint_velocities"), dtype=float)[:, servo_id]
+joint_torque2 = np.array(Trajectory_Base2.get_keyValues("joint_torques"))[:, servo_id]
 joint_power2 =  np.absolute(joint_torque2)
-power2 = joint_power2.sum(axis=1)
 
 
 
@@ -64,9 +66,9 @@ power2 = joint_power2.sum(axis=1)
 #explore_similarity(power1, power2, np.intersect1d(times1, times2))
 
 
-explore_similarity(joint_angels, joint_angels2, np.intersect1d(times1, times2))
-
-explore_similarity(joint_velocities, joint_vel2, np.intersect1d(times1, times2))
+explore_similarity(joint_angels, joint_angels2, np.intersect1d(times1, times2), title="Joint angles of the Simulation and the Real Robot", labels=["Simulation", "Real Robot"], y_label="Joint angles in rad")
+explore_similarity(joint_velocities, joint_vel2, np.intersect1d(times1, times2), title="Joint velocities of the Simulation and the Real Robot", labels=["Simulation", "Real Robot"], y_label="Joint velocities in rad/s")
+explore_similarity(joint_power1, joint_power2, np.intersect1d(times1, times2), title="Joint power of the Simulation and the Real Robot", labels=["Simulation", "Real Robot"], y_label="Joint power in Nm")
 
 
 
