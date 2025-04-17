@@ -15,7 +15,9 @@ from Objects.DebugWidget import DebugSlider, DebugButton, DebugSwitch
 # TODO:
 # - [ ] Add a function to give the robots joints a backlash (like in the real robot)
 # - [ ] Messure the real robots jointsvelocity and acceleration and apply them to the simulation
-# - [ ] calculating the inverse kinematics with velocity of backlegs
+# - [x] calculating the inverse kinematics with velocity of backlegs
+# - [x] function that gives similar obs like the real robot.
+# - [ ] make the critical collision fuction working
 
 
 
@@ -186,10 +188,20 @@ class Rabbit:
             p.setCollisionFilterPair (self._id, ground_id, l, -1, 0)
 
 
-    def check_delicate_self_collision(self):
-        """Check if the robot collides with itself
+    def check_delicate_collision(self, ground_id):
+        """Check if certain links collide with the ground
         """
+        links_true = [14, 17, 6, 5]
+        #the rest should be false
+        links_false = [i for i in range(p.getNumJoints(self._id)) if i not in links_true]
+        for l in links_false:
+            #check if the link collides with the ground
+            collision = p.getContactPoints(self._id, ground_id, l)
+            #print("collision:", collision)
+            if isinstance(collision, list) and len(collision) > 0:
+                return True
         return False
+
 
 
 

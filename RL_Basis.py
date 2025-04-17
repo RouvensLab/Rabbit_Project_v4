@@ -10,6 +10,7 @@ class RL_Base(Env):
                 render_mode = "human",
                 observation_type_stacked=["head_orientation", "head_linear_acceleration", "head_angular_velocity", "joint_torques"],
                 observation_type_solo=["phase_signal", "last_action", "User_command"],
+                observation_noise = 0,
                 simulation_Timestep = 0.1,
                 obs_time_space = 1, #in seconds
                 n_stack = 5,
@@ -19,6 +20,7 @@ class RL_Base(Env):
         self.ModelType = ModelType
         self.observation_type_stacked = observation_type_stacked
         self.observation_type_solo = observation_type_solo
+        self.observation_noise = observation_noise
         self.simulation_Timestep = simulation_Timestep
         self.obs_time_space = obs_time_space
         self.render_mode = render_mode
@@ -69,6 +71,10 @@ class RL_Base(Env):
     def get_observation(self, observation_stack, observation_solo):
         
         #Stacked observations
+
+        # add noise to the observation stack
+        if self.observation_noise:
+            observation_stack = np.clip(observation_stack + np.random.normal(0, self.observation_noise, size=observation_stack.shape), -1, 1)
 
         #print("stacked_obs", len(observation))
          # Append the new observation to the stack

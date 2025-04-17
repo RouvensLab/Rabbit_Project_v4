@@ -21,9 +21,34 @@ class RL_Env(RL_Base):
                 recorded_movement_file_path_dic = {"Bewegung2": 4, 
                                                     },
                 terrain_type = "random_terrain",
+                different_terrain = False,
+                different_gravity = False,
                 restriction_2D = False,
                 
                 real_robot = False,
+
+                reward_weights = {
+                # Imitation
+                "torso_pos": 1.5,
+                "torso_orient": 2.0,
+                "linear_vel_xy": 0.5,
+                "linear_vel_z": 0.5,
+                "angular_vel_xy": 0.5,
+                "angular_vel_z": 0.5,
+                "LegJoint_pos": 3.0,
+                "LegJoint_vel": 0.25,
+                "component_coordinates_world": 2.0,
+                #"Contact": 1.0,
+
+                # Regularization
+                "Joint_torques": 0.15,
+                "Joint_acc": 0.15,
+                "action_rate": 1.0,
+                "action_acc": 0.05,
+
+                # Survival
+                "survival": 1.5,
+            },
                 **kwargs
                 ):
         super(RL_Env, self).__init__()
@@ -34,6 +59,10 @@ class RL_Env(RL_Base):
 
         self.terrain_type = terrain_type
         self.restriction_2D = restriction_2D
+        self.different_terrain = different_terrain
+        self.different_gravity = different_gravity
+
+        self.reward_weights = reward_weights
 
         self.gui = gui
         
@@ -88,28 +117,6 @@ class RL_Env(RL_Base):
     def calculate_reward(self): 
         if "Disney_Imitation" in self.RewardsType:            
             # Weights from the provided reward function
-            weights = {
-                # Imitation
-                "torso_pos": 1.0,
-                "torso_orient": 2.0,
-                "linear_vel_xy": 0.5,
-                "linear_vel_z": 0.5,
-                "angular_vel_xy": 0.5,
-                "angular_vel_z": 0.5,
-                "LegJoint_pos": 3.0,
-                "LegJoint_vel": 0.25,
-                "component_coordinates_world": 2.0,
-                #"Contact": 1.0,
-
-                # Regularization
-                "Joint_torques": 0.15,
-                "Joint_acc": 0.15,
-                "action_rate": 1.0,
-                "action_acc": 0.05,
-
-                # Survival
-                "survival": 1.0,
-            }
 
             def reverse_exp_reward(base, agent_value, expert_value, weight, normalize_value = 1):
                 distance = self.euclidean_distance(agent_value, expert_value, norm=normalize_value)
@@ -136,32 +143,32 @@ class RL_Env(RL_Base):
             base_position, base_orientation, base_linear_velocity, base_angular_velocity, joint_angles, joint_torques, joint_velocities, component_coordinates_world = self.get_rabbit_states()
             expert_position, expert_orientation, expert_linear_velocity, expert_angular_velocity, expert_joint_angles, expert_joint_torques, expert_joint_velocities, expert_component_coordinates_world = self.expert_states
             # Imitation
-            r_imitation += reverse_exp_reward(10, base_position, expert_position, weights["torso_pos"])
-            r_imitation += reverse_exp_reward(20, base_orientation, expert_orientation, weights["torso_orient"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(10, base_position, expert_position, self.reward_weights["torso_pos"])
+            r_imitation += reverse_exp_reward(20, base_orientation, expert_orientation, self.reward_weights["torso_orient"], normalize_value=math.pi)
             #for the component cooddinates
-            r_imitation += reverse_exp_reward(30, component_coordinates_world, expert_component_coordinates_world, weights["component_coordinates_world"])
-            r_imitation += reverse_exp_reward(0.5, base_linear_velocity[:2], expert_linear_velocity[:2], weights["linear_vel_xy"])
-            r_imitation += reverse_exp_reward(5, base_linear_velocity[2], expert_linear_velocity[2], weights["linear_vel_z"])
-            r_imitation += reverse_exp_reward(0.5, base_angular_velocity[:2], expert_angular_velocity[:2], weights["angular_vel_xy"], normalize_value=math.pi)
-            r_imitation += reverse_exp_reward(5, base_angular_velocity[2], expert_angular_velocity[2], weights["angular_vel_z"], normalize_value=math.pi)
-            r_imitation += reverse_exp_reward(20, joint_angles, expert_joint_angles, weights["LegJoint_pos"], normalize_value=math.pi)
-            r_imitation += reverse_exp_reward(0.5, joint_velocities, expert_joint_velocities, weights["LegJoint_vel"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(30, component_coordinates_world, expert_component_coordinates_world, self.reward_weights["component_coordinates_world"])
+            r_imitation += reverse_exp_reward(0.5, base_linear_velocity[:2], expert_linear_velocity[:2], self.reward_weights["linear_vel_xy"])
+            r_imitation += reverse_exp_reward(5, base_linear_velocity[2], expert_linear_velocity[2], self.reward_weights["linear_vel_z"])
+            r_imitation += reverse_exp_reward(0.5, base_angular_velocity[:2], expert_angular_velocity[:2], self.reward_weights["angular_vel_xy"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(5, base_angular_velocity[2], expert_angular_velocity[2], self.reward_weights["angular_vel_z"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(20, joint_angles, expert_joint_angles, self.reward_weights["LegJoint_pos"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(0.5, joint_velocities, expert_joint_velocities, self.reward_weights["LegJoint_vel"], normalize_value=math.pi)
             #contact !!!
 
             base_position, base_orientation, base_linear_velocity, joint_torques, component_coordinates_world, joint_acceleration = self.get_rabbit_infos()
             # Regularization
-            r_regularization += -np.clip((np.linalg.norm(joint_torques)**2) * weights["Joint_torques"], 0, weights["Joint_torques"])
-            r_regularization += -np.clip((np.linalg.norm(joint_acceleration/(8*math.pi**3)) **2)* weights["Joint_acc"], 0, weights["Joint_acc"])
-            r_regularization += -np.clip((self.euclidean_distance(self.current_action, np.array(self.last_action))**2)* weights["action_rate"], 0, weights["action_rate"])
-            r_regularization += -np.clip((np.linalg.norm(np.array(self.current_action)-2*np.array(self.last_action)+np.array(self.last2_action))**2)* weights["action_acc"], 0, weights["action_acc"])
+            r_regularization += -np.clip((np.linalg.norm(joint_torques)**2) * self.reward_weights["Joint_torques"], 0, self.reward_weights["Joint_torques"])
+            r_regularization += -np.clip((np.linalg.norm(joint_acceleration/(8*math.pi**3)) **2)* self.reward_weights["Joint_acc"], 0, self.reward_weights["Joint_acc"])
+            r_regularization += -np.clip((self.euclidean_distance(self.current_action, np.array(self.last_action))**2)* self.reward_weights["action_rate"], 0, self.reward_weights["action_rate"])
+            r_regularization += -np.clip((np.linalg.norm(np.array(self.current_action)-2*np.array(self.last_action)+np.array(self.last2_action))**2)* self.reward_weights["action_acc"], 0, self.reward_weights["action_acc"])
 
             # Survival
-            r_survival += weights["survival"]
+            r_survival += self.reward_weights["survival"]
 
             tot_reward = r_imitation + r_regularization + r_survival
 
             #give feedback to the trajectory deck
-            max_score = sum(weights.values())
+            max_score = sum(self.reward_weights.values())
             score = (tot_reward) / max_score
             #gives a score between 0 and 5 in integer
             print("score", score)
@@ -182,11 +189,11 @@ class RL_Env(RL_Base):
         #checks how many steps where simulated, stops the simulation when the animation is over
         #if (self.ROS_Env.simulation_steps*10*self.speed)+self.start_recording_time > self.end_recording_time:
         if self.Horizon_Length:
-            if abs(base_orientation[0]) > math.pi/2 or abs(base_orientation[1]) > math.pi/2  or base_position[2] < 0.005:
+            if abs(base_orientation[0]) > math.pi/2 or abs(base_orientation[1]) > math.pi/2  or base_position[2] < 0.075:
                 terminated = True
-            elif self.simulation.rabbit.check_delicate_self_collision() and self.n_steps > 20:
+            elif self.simulation.rabbit.check_delicate_collision(self.simulation.ground.id):
                 terminated = True
-            elif "User_command" in self.observation_type_solo and self.User_command[0] >= 0.5:
+            elif "User_command" in self.observation_type_solo and self.User_command[0] >= 0.3:
                 terminated = True
             else:
                 terminated = False
@@ -291,7 +298,13 @@ class RL_Env(RL_Base):
             self.User_command = list(np.zeros(2))
 
         # Reset the state of the environment to an initial state
-        self.simulation.rabbit.reset()
+        if hasattr(self, "num_reset"):
+            self.num_reset += 1
+        else:
+            self.num_reset = 1
+        print("reset number: ", self.num_reset)
+        #reset the simulation
+        self.simulation.reset(seed=seed, reset_gravity_direction=self.num_reset % 25 == 0 and self.different_gravity, reset_terrain=self.num_reset % 25 == 0 and self.different_terrain)#resets the robot and the terrain every 25 resets
 
         #get the observations
         observations = np.array(self.get_observation())
@@ -329,7 +342,7 @@ if __name__ == "__main__":
         "Horizon_Length": True,
         "obs_time_space": 2,
         "simulation_Timestep": 0.25,
-        "terrain_type": "flat",
+        "terrain_type": "random_terrain",
         "recorded_movement_file_path_dic": {
                                              r"Bewegung1": 5,
                                              },

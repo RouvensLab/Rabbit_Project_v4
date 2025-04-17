@@ -80,8 +80,18 @@ class Terrain:
         else:
             self._id = p.loadURDF("plane.urdf")
 
-        # Set the ground's lateral friction to 1
-        p.changeDynamics(self._id, -1, lateralFriction=1)
+        # Simulate a ground like a carpet
+        lateralFriction = 0.5
+        restitution = 0.5
+        rollingFriction = 0.1
+        # Set the ne dynamics
+        p.changeDynamics(self._id, -1, lateralFriction=lateralFriction, restitution=restitution, rollingFriction=rollingFriction)
+
+    def reset(self):
+        # Reset the terrain if needed (e.g., re-generate the heightfield)
+        p.removeBody(self._id)
+        self.__init__(self.terrain_type, self.platform_size)
+
 
     @property
     def id(self):

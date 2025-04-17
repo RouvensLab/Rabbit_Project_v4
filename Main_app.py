@@ -45,10 +45,11 @@ class ActionTimetableEditor(QMainWindow):
         "observation_type_stacked": [],
         "observation_type_solo": ["phase_signal"],
         "terrain_type": "flat",
-        "Horizon_Length":True,
+        "different_gravity": False,
+        "Horizon_Length": True,
         "recorded_movement_file_path_dic": {"PushSprint_v1": 5},
         "restriction_2D": False,
-        "simulation_Timestep": 0.1
+        "simulation_Timestep": 0.1,
     }
         self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
         self.RlEnv_startup_parms = {"render_mode": "fast", "real_robot": False, "gui": True, "RobotType":"Rabbit_v3_mesured"}
@@ -70,10 +71,11 @@ class ActionTimetableEditor(QMainWindow):
             "observation_type_solo": ["phase_signal"],
             "simulation_Timestep": 0.1,
             "obs_time_space": 1,
+
         }
         self.RLRobot_starup_parms = {"render_mode": "fast", "gui": True, "RobotType": "Rabbit_mesured"}
         self.RlRobot = None
-        self._init_RlRobot()
+        self._define_RLRobot()
 
         self.initUI()
         self.env_pause = False
@@ -108,7 +110,17 @@ class ActionTimetableEditor(QMainWindow):
             print(f"Error initializing RLEnv: {e}")
             self.RlEnv = None
             return False
-
+        
+    def _define_RLRobot(self):
+        self.RlRobot = None
+        self.RealRabbitMesure_widget = QWidget()
+        if hasattr(self, "RealObservation_tab"):
+            if self.RealObservation_tab.layout():
+                QWidget().setLayout(self.RealObservation_tab.layout())
+            layout = QVBoxLayout()
+            layout.addWidget(self.RealRabbitMesure_widget)
+            self.RealObservation_tab.setLayout(layout)
+    
     def _init_RlRobot(self):
         try:
             if hasattr(self, 'RlRobot') and self.RlRobot is not None:
@@ -397,7 +409,8 @@ class ActionTimetableEditor(QMainWindow):
         if self.RlEnv.simulation.rabbit.is_recording():
             self.RabbitMesure_widget.TrajRecorder.stop_recording_trajectory()
 
-
+        print("Resetting simulation...")
+        print(f"Simulation paused: {self.RlEnv}")
         try:
             if self.RlEnv and self.isControled_dropdown.currentText() == "Only Simulation":
                 return self.RlEnv.reset()
@@ -476,30 +489,30 @@ class ActionTimetableEditor(QMainWindow):
             self._init_RlRobot()
         self.start_thread()
 
-    def open_RlEnv(self, env_param_kwargs):
-        self.RlEnv_param_kwargs = env_param_kwargs
-        #open a new environment
-        self._init_RlEnv()
-        self.RlEnv.simulation.hung = True
-        self.env_pause = True
+    # def open_RlEnv(self, env_param_kwargs):
+    #     self.RlEnv_param_kwargs = env_param_kwargs
+    #     #open a new environment
+    #     self._init_RlEnv()
+    #     self.RlEnv.simulation.hung = True
+    #     self.env_pause = True
 
-        #if everything is ok, close the editor window
-        if self.env_param_editor:
-            self.env_param_editor.close()
-            self.env_param_editor = None
-            print("env_param_editor closed!")
+    #     #if everything is ok, close the editor window
+    #     if self.env_param_editor:
+    #         self.env_param_editor.close()
+    #         self.env_param_editor = None
+    #         print("env_param_editor closed!")
 
-    def open_RlRobot(self, RLRobot_param_kwargs):
-        self.RLRobot_param_kwargs = RLRobot_param_kwargs
-        #open a new environment
-        self._init_RlRobot()
-        self.env_pause = True
+    # def open_RlRobot(self, RLRobot_param_kwargs):
+    #     self.RLRobot_param_kwargs = RLRobot_param_kwargs
+    #     #open a new environment
+    #     self._init_RlRobot()
+    #     self.env_pause = True
 
-        #if everything is ok, close the editor window
-        if self.env_param_editor:
-            self.env_param_editor.close()
-            self.env_param_editor = None
-            print("env_param_editor closed!")
+    #     #if everything is ok, close the editor window
+    #     if self.env_param_editor:
+    #         self.env_param_editor.close()
+    #         self.env_param_editor = None
+    #         print("env_param_editor closed!")
 
     def cleanup_simulation(self):
         self.end_thread = True
@@ -507,6 +520,7 @@ class ActionTimetableEditor(QMainWindow):
         if self.simulation_thread:
             self.simulation_thread.join()
             self.simulation_thread = None
+            
         if self.RlEnv:
             self.RlEnv.close()
             self.RlEnv = None
@@ -526,8 +540,19 @@ class ActionTimetableEditor(QMainWindow):
         self.cleanup_simulation()
         self.RlEnv_param_kwargs = env_param_kwargs
         self.RLRobot_param_kwargs["simulation_Timestep"] = env_param_kwargs["simulation_Timestep"]
-        self._init_RlEnv()
-        self._init_RlRobot()
+
+        #check the current App state: 
+        if self.isControled_dropdown.currentText()== "Only Simulation":
+            result = self._init_RlEnv()
+            print(f"Only Simulation will be restarted. Restart was {"successful" if result else "not successful"}")
+        elif self.isControled_dropdown.currentText() == "Only Real Robot":
+            result = self._init_RlRobot()
+            print(f"Only Real Robot will be restarted. Restart was {"successful" if result else "not successful"}")
+        elif self.isControled_dropdown.currentText() == "Simulation_Imitation":
+            result1 = self._init_RlEnv()
+            result2 = self._init_RlRobot()
+            print(f"Simulation_Imitation will be restarted. Restart was {"successful" if result1 and result2 else "not successful"}")
+
         self.start_thread()
         
 

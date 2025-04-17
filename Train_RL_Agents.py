@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
 
     alg_name = "SAC"
-    ModellName = "Disney_Imitation_v4"
+    ModellName = "Disney_Imitation_v8"
     main_dir = r"Models\\" + alg_name + ModellName
     models_dir = os.path.join(main_dir, "models")
     logdir = models_dir+"\\logs"
@@ -63,37 +63,61 @@ if __name__ == "__main__":
     if not os.path.exists(logdir):
         os.makedirs(logdir)
     
-    total_timesteps = 40_000_000  # Increase total training steps
+    total_timesteps = 25_000_000  # Increase total training steps
 
     env_param_kwargs = {
         "ModelType": alg_name,
         "RobotType": "Rabbit_v3",
         "rewards_type": ["Disney_Imitation"],
-        "observation_type_stacked": ["head_orientation", "joint_torques"],
+        "observation_type_stacked": ["head_orientation", "head_linear_acceleration", "joint_angles"],
         "observation_type_solo": ["phase_signal", "last_action", "User_command"],
+        "observation_noise": 0.01,
         "Horizon_Length": True,
         "obs_time_space": 1.5,
         "simulation_Timestep": 0.2,
-        "terrain_type": "flat",
+        "terrain_type": "random_terrain",
+        "different_terrain": False,
+        "different_gravity": True,
         "recorded_movement_file_path_dic": {
-                                                r"Bewegung1": 3,
-                                                r"Bewegung2": 4,
-                                                r"Bewegung3": 4,
-                                                r"Bewegung4": 4,
-                                                r"CurveLeft1": 5,
-                                                r"CurveRight1": 5,
-                                                r"Standing1": 1,
-                                                r"Standing2": 1,
-                                                r"Standing3": 1,
+                                                "DanceSprint_v1": 3,
+                                                "MännchenStand_v1": 1,
+                                                "SprintBouncy_v1": 5,
+                                                "SprintForward_v1": 4,
+                                                "SprintForward_v2": 4,
+                                                "Standing1": 1,
+                                                # "Standing2": 1,
+                                                # "Standing3": 1,
                                              },
+        "reward_weights": {
+                    # Imitation
+                    "torso_pos": 1.0,
+                    "torso_orient": 2.0,
+                    "linear_vel_xy": 0.5,
+                    "linear_vel_z": 0.5,
+                    "angular_vel_xy": 0.5,
+                    "angular_vel_z": 0.5,
+                    "LegJoint_pos": 5.0,
+                    "LegJoint_vel": 0.5,
+                    "component_coordinates_world": 1.0,
+                    #"Contact": 1.0,
+
+                    # Regularization
+                    "Joint_torques": 0.15,
+                    "Joint_acc": 0.15,
+                    "action_rate": 1.0,
+                    "action_acc": 0.05,
+
+                    # Survival
+                    "survival": 1.5,
+                }
     }
 
     if alg_name == "SAC":
         hyper_params = {
             "learning_rate": 2*1e-5,#2*1e-5=0.00002
-            "batch_size": 3000,#8192*24,
-            "buffer_size": 700_000,
-            "policy_kwargs": dict(net_arch=dict(pi=[512, 256], qf=[512, 256])),
+            "batch_size": 3500,#8192*24,
+            "buffer_size": 800_000,
+            "policy_kwargs": dict(net_arch=dict(pi=[512, 512], qf=[512, 256])),
             "gamma" : 0.96
 
         }
@@ -118,7 +142,7 @@ if __name__ == "__main__":
     if not show_last_results:
 
         # Make multiprocess env
-        num_cpu = 30 # Adjust the number of CPUs based on your machine
+        num_cpu = 25 # Adjust the number of CPUs based on your machine
         envs = SubprocVecEnv([make_env(i, env_param_kwargs=env_param_kwargs) for i in range(num_cpu)])
 
         #creates a documentation of the model hyperparameter, the environements parameter and other information concearned to the training, in the Model directory.
@@ -168,7 +192,7 @@ if __name__ == "__main__":
                         **hyper_params
                         )
             #load trained SAC policy
-            #model = SAC.load(r"Models\SACReinforceImitation_v10\models\best_model.zip", env=envs, tensorboard_log=logdir)
+            #model = SAC.load(r"Models\SACDisney_Imitation_v7\models\rl_model_2500000_steps.zip", env=envs, tensorboard_log=logdir)
 
         elif alg_name == "PPO":
             from stable_baselines3 import PPO
@@ -191,7 +215,7 @@ if __name__ == "__main__":
     
     else:
         # Load the trained agent
-        model = SAC.load(r"Models\SACDisney_Imitation_v2\models\rl_model_6000000_steps.zip")
+        model = SAC.load(r"Models\SACDisney_Imitation_v6\models\rl_model_2500000_steps.zip")
 
         # Evaluate the agent
         env = RL_Env(render_mode="human", gui=True, **env_param_kwargs)
@@ -199,7 +223,7 @@ if __name__ == "__main__":
         for i in range(1000):
             action, info = model.predict(obs)
             obs, rewards, terminated, truncated, info = env.step(action)
-            if truncated:
+            if truncated or terminated:
                 obs, _ = env.reset()
 
         env.close()

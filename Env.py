@@ -132,6 +132,31 @@ class Simulation:
         if self.simulationSpeed == "human":
             self.time_interval.wait_for_step(self.simulation_Timestep)
 
+    def reset(self, seed, reset_gravity_direction=False, reset_terrain=False):
+        if reset_terrain:
+            #self.ground.reset()
+            pass
+        if reset_gravity_direction:
+            # give a random gravity vector whichs roll and pitch is in range of [-30, 30]. The length is 1*9.81
+            maxAngle = 5
+            pitch, roll = np.random.uniform(-np.pi/180*maxAngle, np.pi/180*maxAngle, 2)
+            normal_vec = np.array([0,0,-1])
+            rotation_matrix_x = np.array([[1, 0, 0],
+                                        [0, np.cos(pitch), -np.sin(pitch)],
+                                        [0, np.sin(pitch), np.cos(pitch)]])
+            
+            rotation_matrix_y = np.array([[np.cos(roll), 0, np.sin(roll)],
+                                        [0, 1, 0],
+                                        [-np.sin(roll), 0, np.cos(roll)]])
+            gravity_direction = rotation_matrix_x @ normal_vec
+            gravity_direction = rotation_matrix_y @ gravity_direction
+            gravity_direction = gravity_direction*9.81
+            gravity_direction = gravity_direction.tolist()
+            p.setGravity(*gravity_direction)
+
+        if self.rabbit is not None:
+            self.rabbit.reset()
+
     def close(self):
         if self.connection_id is not None:
             try:
