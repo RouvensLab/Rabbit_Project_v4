@@ -110,6 +110,5 @@ class TrajectoryRecorder:
 
 if __name__=="__main__":
     trajRec = TrajectoryRecorder()
-    trajRec.load_trajectory("PushSprint_v1")
+    trajRec.load_trajectory("Expert0_8_v1")
     print(trajRec.get_trajectory_infos())
-        

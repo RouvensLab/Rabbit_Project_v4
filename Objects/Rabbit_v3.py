@@ -59,7 +59,7 @@ class Rabbit:
 
         #when there are other physical properties for the motors, they can be set here
         self.MAXFORCE = 2.9  #2.9#2.941995#5#in Newton   3 N/m
-        self.MAXVELOCITY = (2*math.pi)/(0.222*6)#in rad/s
+        self.MAXVELOCITY = (2*math.pi)/(0.4*6)#(2*math.pi)/(0.222*6)#in rad/s
         self.ACCELERATION = 8.79/180*math.pi#8.79 #(degrees/ s^2) by 7.4 v
         # self.Motors_strength = [self.MAXFORCE for i in range(self.numMotors)]
         # self.Motors_velocity = [self.MAXVELOCITY for i in range(self.numMotors)]
@@ -80,8 +80,8 @@ class Rabbit:
         #set the robots lateral_friction to 1
         #print("lateralFriction of Robot: ", p.getDynamicsInfo(self.rabbit.id, -1)[1])
         p.changeDynamics(self._id, -1, 
-                         lateralFriction=1,
-                         jointDamping=0.1  # Damping for compliance
+                         lateralFriction=0.5,
+                         #jointDamping=0.1  # Damping for compliance
                          )
         
         #set the self collision of the robot

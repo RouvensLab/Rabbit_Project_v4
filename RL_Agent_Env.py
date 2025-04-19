@@ -20,6 +20,10 @@ class RL_Env(RL_Base):
                 rewards_type=["Disney_Imitation"],
                 recorded_movement_file_path_dic = {"Bewegung2": 4, 
                                                     },
+                recorded_movement_file_settings = {
+                    "Bewegung2": [1]
+                },
+                phase_signal_duration_def = 1,
                 terrain_type = "random_terrain",
                 different_terrain = False,
                 different_gravity = False,
@@ -29,7 +33,7 @@ class RL_Env(RL_Base):
 
                 reward_weights = {
                 # Imitation
-                "torso_pos": 1.5,
+                "torso_pos": 2.5,
                 "torso_orient": 2.0,
                 "linear_vel_xy": 0.5,
                 "linear_vel_z": 0.5,
@@ -56,6 +60,8 @@ class RL_Env(RL_Base):
         
         self.RewardsType = rewards_type
         self.recorded_movement_file_path_dic = recorded_movement_file_path_dic
+        self.recorded_movement_file_settings = recorded_movement_file_settings
+        self.phase_signal_duration = phase_signal_duration_def
 
         self.terrain_type = terrain_type
         self.restriction_2D = restriction_2D
@@ -92,6 +98,7 @@ class RL_Env(RL_Base):
         Get the user command by the trajectory.
         This is calculated by the base_position difference between the agent and the expert
         and the base_orientation difference between the agent and the expert.
+        in radians and meters
 
         agent_pos: [x, y, z]
         agent_orient: [roll, pitch, yaw]
@@ -103,16 +110,17 @@ class RL_Env(RL_Base):
         #calculate the difference between the agent and the expert
         diff = np.array(expert_pos) - np.array(agent_pos)
         #calculate the angle between the agent and the expert
-        angle = math.atan2(diff[1], diff[0])
+        angle = math.atan2(diff[1], diff[0]) + math.pi/2
         #calculate the difference between the agent and the expert orientation
-        diff_orient = agent_orient[2] - expert_orient[2]
+        #diff_orient = agent_orient[2]# - expert_orient[2]
         #calculate the difference between the agent and the expert orientation
-        angle_orient = math.atan2(math.sin(diff_orient), math.cos(diff_orient))/math.pi
+        #angle_orient = math.atan2(math.sin(diff_orient), math.cos(diff_orient))/math.pi
+
+        diff_angle = agent_orient[2] - angle
         
         #get v_x, v_y, from the perspective of the agent
-        v_x = np.clip(np.linalg.norm(diff), -1, 1)
-        omega_z = np.clip(angle_orient, -1, 1)
-        return [v_x, omega_z], [0, 0, angle]
+        v_x = np.linalg.norm(diff)
+        return [v_x, diff_angle], [0, 0, angle]
     
     def calculate_reward(self): 
         if "Disney_Imitation" in self.RewardsType:            
@@ -135,24 +143,26 @@ class RL_Env(RL_Base):
 
 
 
-            self.simulation.show_Points([self.expert_states[0]], color=[0, 1, 0])
             
             # print("Expert States:", self.expert_states, len(self.expert_states))
             # print("Rabbit States:", self.get_rabbit_states(), len(self.get_rabbit_states()))
             #data_structure = ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities"]
             base_position, base_orientation, base_linear_velocity, base_angular_velocity, joint_angles, joint_torques, joint_velocities, component_coordinates_world = self.get_rabbit_states()
             expert_position, expert_orientation, expert_linear_velocity, expert_angular_velocity, expert_joint_angles, expert_joint_torques, expert_joint_velocities, expert_component_coordinates_world = self.expert_states
+            
+            
+            self.simulation.show_Points([expert_position, base_position], color=[0, 1, 0])
             # Imitation
-            r_imitation += reverse_exp_reward(10, base_position, expert_position, self.reward_weights["torso_pos"])
-            r_imitation += reverse_exp_reward(20, base_orientation, expert_orientation, self.reward_weights["torso_orient"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(5, base_position, expert_position, self.reward_weights["torso_pos"])
+            r_imitation += reverse_exp_reward(25, base_orientation, expert_orientation, self.reward_weights["torso_orient"], normalize_value=math.pi)
             #for the component cooddinates
-            r_imitation += reverse_exp_reward(30, component_coordinates_world, expert_component_coordinates_world, self.reward_weights["component_coordinates_world"])
+            r_imitation += reverse_exp_reward(5, component_coordinates_world, expert_component_coordinates_world, self.reward_weights["component_coordinates_world"], normalize_value=10)
             r_imitation += reverse_exp_reward(0.5, base_linear_velocity[:2], expert_linear_velocity[:2], self.reward_weights["linear_vel_xy"])
             r_imitation += reverse_exp_reward(5, base_linear_velocity[2], expert_linear_velocity[2], self.reward_weights["linear_vel_z"])
             r_imitation += reverse_exp_reward(0.5, base_angular_velocity[:2], expert_angular_velocity[:2], self.reward_weights["angular_vel_xy"], normalize_value=math.pi)
             r_imitation += reverse_exp_reward(5, base_angular_velocity[2], expert_angular_velocity[2], self.reward_weights["angular_vel_z"], normalize_value=math.pi)
-            r_imitation += reverse_exp_reward(20, joint_angles, expert_joint_angles, self.reward_weights["LegJoint_pos"], normalize_value=math.pi)
-            r_imitation += reverse_exp_reward(0.5, joint_velocities, expert_joint_velocities, self.reward_weights["LegJoint_vel"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(25, joint_angles, expert_joint_angles, self.reward_weights["LegJoint_pos"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(0.5, joint_velocities, expert_joint_velocities, self.reward_weights["LegJoint_vel"], normalize_value=8.79/180*math.pi)
             #contact !!!
 
             base_position, base_orientation, base_linear_velocity, joint_torques, component_coordinates_world, joint_acceleration = self.get_rabbit_infos()
@@ -189,7 +199,7 @@ class RL_Env(RL_Base):
         #checks how many steps where simulated, stops the simulation when the animation is over
         #if (self.ROS_Env.simulation_steps*10*self.speed)+self.start_recording_time > self.end_recording_time:
         if self.Horizon_Length:
-            if abs(base_orientation[0]) > math.pi/2 or abs(base_orientation[1]) > math.pi/2  or base_position[2] < 0.075:
+            if abs(base_orientation[0]) > math.pi/2 or abs(base_orientation[1]) > math.pi/2  or base_position[2] < 0.09:
                 terminated = True
             elif self.simulation.rabbit.check_delicate_collision(self.simulation.ground.id):
                 terminated = True
@@ -241,10 +251,13 @@ class RL_Env(RL_Base):
         if "last_action" in self.observation_type_solo:
             observation_solo = np.concatenate([observation_solo, self.current_action])
         if "User_command" in self.observation_type_solo:
-            observation_solo = np.concatenate([observation_solo, self.User_command])
+            observation_solo = np.concatenate([observation_solo, np.clip([self.User_command[0], self.User_command[1]/math.pi], -1, 1)])
         return super().get_observation(stacked_obs, observation_solo)
 
     def step(self, action):
+        #remove debug lines
+        self.simulation.remove_all_debug_objects()
+
         self.current_action = action        
         # Execute one time step within the environment
         self.simulation.rabbit.send_goal_pose(action)
@@ -265,7 +278,17 @@ class RL_Env(RL_Base):
             expert_pos, expert_orient, _ = self.expert_states[:3]
             self.User_command, User_orient = self.get_User_command_by_Trajectory(agent_pos, agent_orient, expert_pos, expert_orient)
 
+            #show the user command
+            lenght = self.User_command[0]
+            angle = self.User_command[1] + User_orient[2] + math.pi/2
+            x = np.cos(angle) * lenght
+            y = np.sin(angle) * lenght
+            command_vector = np.array([x, y, 0])
+            print("User command: ", self.User_command, "command_vector: ", command_vector)
+            self.simulation.show_linked_vectors([agent_pos, command_vector])
 
+
+        
         
 
         #get the outputs
@@ -292,8 +315,15 @@ class RL_Env(RL_Base):
             #to get the expert data_types
             self.get_rabbit_states = self.simulation.rabbit.create_get_informations(self.expert_trajectory.data_structure)
 
+            #check if the self.recorded_movement_file_settings has the actual trajectory and search for the expertPhase_signal
+            if self.expert_trajectory.trajectory_name in self.recorded_movement_file_settings.keys():
+                self.phase_signal_duration = self.recorded_movement_file_settings[self.expert_trajectory.trajectory_name][0]
+            else:
+                self.phase_signal_duration = 1
+
+
         if "phase_signal" in self.observation_type_solo:
-            self.phase_generator = PhaseGenerator(is_periodic=True, duration=1.0, dt=self.simulation_Timestep)
+            self.phase_generator = PhaseGenerator(is_periodic=True, duration=self.phase_signal_duration, dt=self.simulation_Timestep)
         if "User_command" in self.observation_type_solo:
             self.User_command = list(np.zeros(2))
 
@@ -344,7 +374,7 @@ if __name__ == "__main__":
         "simulation_Timestep": 0.25,
         "terrain_type": "random_terrain",
         "recorded_movement_file_path_dic": {
-                                             r"Bewegung1": 5,
+                                             r"Expert0_8_v1": 5,
                                              },
     }
     env = RL_Env(**env_param_kwargs)

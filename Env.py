@@ -86,8 +86,7 @@ class Simulation:
             self.connection_id = None
             raise
 
-    def __del__(self):
-        p.disconnect()
+
 
     def show_world_coordinate_system(self):
         #show the world coordinate system
@@ -118,6 +117,10 @@ class Simulation:
     def show_TextPoint(self, point_coord, text):
         #show the text at a specific point
         p.addUserDebugText(text, point_coord, [0, 0, 1], 1.2, lifeTime=self.simulation_Timestep)
+
+    def remove_all_debug_objects(self):
+        #remove all debug lines
+        p.removeAllUserDebugItems()
 
 
     def Sim_step(self):
@@ -165,41 +168,57 @@ class Simulation:
             except:
                 pass
 
+    # def __del__(self):#called when the simulation is closed
+    #     # Disconnect from the physics server if connected
+    #     if self.connection_id is not None:
+    #         p.disconnect(self.connection_id)
+
 if __name__ == "__main__":
-    env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
-    env.rabbit.add_DebugPanel()
-    #env.rabbit.set_new_mass()
-    #env.rabbit.create_seperate_Window()
-    #env.show_world_coordinate_system()
-    #env.rabbit.add_UserControlPanel(all_joints=False)
-    #env.rabbit.get_link_infos()
-    #env.rabbit.show_center_of_mass()
-    #time.sleep(10000)
-    # funktion = env.rabbit.create_get_informations(["joint_angles"])
-    # env.rabbit.servoControler.set_torque_state(7, True)
-    # env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
-    while True:
-        print("step start")
-        time.sleep(0.1)
-        env.Sim_step()
-        env.rabbit.send_goal_pose([1, 1, 1, 1, 1, 1, 1, 1])
-        # print("Joint angles", funktion())
+    # env = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
+    # env.rabbit.add_DebugPanel()
+    # #env.rabbit.set_new_mass()
+    # #env.rabbit.create_seperate_Window()
+    # env.show_world_coordinate_system()
+    # #env.rabbit.add_UserControlPanel(all_joints=False)
+    # #env.rabbit.get_link_infos()
+    # #env.rabbit.show_center_of_mass()
+    # time.sleep(10000)
+    # # funktion = env.rabbit.create_get_informations(["joint_angles"])
+    # # env.rabbit.servoControler.set_torque_state(7, True)
+    # # env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
+    # while True:
+    #     print("step start")
+    #     time.sleep(0.1)
+    #     env.Sim_step()
+    #     env.rabbit.send_goal_pose([1, 1, 1, 1, 1, 1, 1, 1])
+    #     # print("Joint angles", funktion())
 
-        time.sleep(0.1)
-        print("step")
-        #env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
-        # print("Joint angles", funktion())
+    #     time.sleep(0.1)
+    #     print("step")
+    #     #env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])
+    #     # print("Joint angles", funktion())
 
-        for i in range(100):
-            # Send new command to the motors
-            env.rabbit.send_motor_commands([2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
-            env.Sim_step()
-            #env.rabbit.show_center_of_mass()
-            time.sleep(0.2)
+    #     for i in range(100):
+    #         # Send new command to the motors
+    #         env.rabbit.send_motor_commands([2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
+    #         env.Sim_step()
+    #         #env.rabbit.show_center_of_mass()
+    #         time.sleep(0.2)
         
-        for i in range(100):
-            # Send new command to the motors
-            env.rabbit.send_motor_commands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-            env.Sim_step()
-            #env.rabbit.show_center_of_mass()
-            time.sleep(0.2)
+    #     for i in range(100):
+    #         # Send new command to the motors
+    #         env.rabbit.send_motor_commands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    #         env.Sim_step()
+    #         #env.rabbit.show_center_of_mass()
+    #         time.sleep(0.2)
+    env1 = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3_mesured")
+    env1.show_world_coordinate_system()
+
+    # delete env1
+    env1.close()
+
+    # create a new env2
+    env2 = Simulation(gui=True, simulation_speed="human", rabbit_type="Rabbit_v3")
+    env2.show_world_coordinate_system()
+    time.sleep(10000)
+    env2.close()

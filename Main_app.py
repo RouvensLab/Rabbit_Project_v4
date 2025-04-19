@@ -11,18 +11,23 @@ from PySide6.QtWidgets import (
     QPushButton, QHeaderView, QMessageBox, QSlider, QFileDialog, QLabel, QCheckBox, QComboBox, QMainWindow, QTabWidget, QLineEdit,QStyleFactory
 )
 from PySide6.QtGui import QIcon,QPalette, QColor
-from PySide6.QtCore import Qt,QSettings, QThread, Signal, Slot
+from PySide6.QtCore import Qt, QSettings, QThread, Signal, Slot, QObject
 
 from RL_Agent_Env import RL_Env
 from RL_Robot_Env import RL_Robot
-from stable_baselines3 import SAC
+
 from tools.Controler import ControlInput
-from tools.TimeInterval import TimeInterval
+
 from tools.Trajectory import TrajectoryRecorder
 
 from AppComponents.ExtendedTableWidget import ExtendedTableWidget
 from AppComponents.EnvParameterEditor import EnvParameterEditor
 from AppComponents.FolderWidget import FolderWidget
+
+from RLSimWorker import SimulationWorker, RobotControler
+from Manual_Expert import ManualExpert
+from stable_baselines3 import SAC
+
     
 class ActionTimetableEditor(QMainWindow):
     def __init__(self):
@@ -37,32 +42,41 @@ class ActionTimetableEditor(QMainWindow):
         # Restore geometry and state
         self.restore_geometry()
 
+        self.simulation_thread = None
+        self.simulation_worker = None
+
+
         #get the default parameters for the RLEnv as a dictionary
 
         self.def_RlEnv_param_kwargs = {
         "ModelType": "SAC",
-        "rewards_type": [],
+        "rewards_type": ["Disney_Imitation"],
         "observation_type_stacked": [],
         "observation_type_solo": ["phase_signal"],
         "terrain_type": "flat",
         "different_gravity": False,
         "Horizon_Length": True,
-        "recorded_movement_file_path_dic": {"PushSprint_v1": 5},
+        "recorded_movement_file_path_dic": {"Expert0_8_v1": 5,
+                                            "Expert0_8_v2": 5,
+                                            "Expert0_8_v3": 5,},
         "restriction_2D": False,
         "simulation_Timestep": 0.1,
     }
         self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
         self.RlEnv_startup_parms = {"render_mode": "fast", "real_robot": False, "gui": True, "RobotType":"Rabbit_v3_mesured"}
         self._init_RlEnv()
+        self.live_time = lambda: self.RlEnv.simulation.rabbit.get_lifetime()
         self.RlEnv.simulation.hung = True
 
-        self.manual_exp = ManualExpert(sim_freq=5)
+        
         self.loaded_model = None
 
         self.env_param_editor = None
 
         self.control_input = None
         self.action = [0]*8
+        self.manual_exp = ManualExpert(sim_freq=5)
+
 
         # Create the Real Robot
         self.RLRobot_param_kwargs = {
@@ -76,10 +90,13 @@ class ActionTimetableEditor(QMainWindow):
         self.RLRobot_starup_parms = {"render_mode": "fast", "gui": True, "RobotType": "Rabbit_mesured"}
         self.RlRobot = None
         self._define_RLRobot()
-
         self.initUI()
+        self.robot_controler = RobotControler(self.manual_exp)
+        self.robot_controler.return_feedback.connect(self.table.highlight_active_row)
+        
         self.env_pause = False
-        self.start_thread()
+        self.start_simulation()
+
 
     def _init_RlEnv(self):
         try:
@@ -156,12 +173,53 @@ class ActionTimetableEditor(QMainWindow):
                 self.RealObservation_tab.setLayout(layout)
             return False
 
-    def run_simulation_with_error_handling(self):
-        try:
-            self.run_simulation()
-        except Exception as e:
-            print(f"Exception in simulation thread: {e}")
-            traceback.print_exc()
+    def start_simulation(self):
+        if self.simulation_thread and self.simulation_thread.isRunning():
+            QMessageBox.warning(self, "Warning", "Simulation is already running!")
+            return
+        if self.simulation_worker:
+            self.simulation_worker.stop()
+
+        # Create the simulation worker and thread
+        self.simulation_worker = SimulationWorker(
+            rl_env=self.RlEnv,
+            rl_robot=self.RlRobot,
+
+            robot_controler=self.robot_controler,
+
+            time_step=self.time_step,
+
+            live_time= lambda: self.live_time(),
+            control_mode= lambda: self.controlMode_active.currentText(),
+            isControlled= lambda: self.isControled_dropdown.currentText(),
+            auto_reset= lambda: self.auto_reset_checkbox.isChecked(),
+            env_pause= lambda: self.env_pause,
+            speed= lambda: self.speed_slider.value(),
+        )
+        self.simulation_thread = QThread()
+        self.simulation_worker.moveToThread(self.simulation_thread)
+
+        # Connect signals and slots
+        self.simulation_worker.finished.connect(self.simulation_thread.quit)
+        self.simulation_worker.finished.connect(self.simulation_worker.deleteLater)
+        self.simulation_thread.finished.connect(self.simulation_thread.deleteLater)
+        self.simulation_worker.error.connect(self.handle_simulation_error)
+        #self.simulation_worker.observation.connect(self.update_observation)
+        #self.simulation_worker.action.connect(self.update_action)
+        self.simulation_worker.reset_done.connect(self.simulation_resetting)
+
+        self.simulation_thread.started.connect(self.simulation_worker.run)
+        self.simulation_thread.start()
+
+        
+
+
+    def stop_simulation(self):
+        if self.simulation_worker:
+            self.simulation_worker.stop()
+        if self.simulation_thread and self.simulation_thread.isRunning():
+            self.simulation_thread.quit()
+            self.simulation_thread.wait()
 
     def restore_geometry(self):
         """Restore the window's geometry and state from QSettings."""
@@ -171,12 +229,8 @@ class ActionTimetableEditor(QMainWindow):
 
 
     def closeEvent(self, event):
-        self.cleanup_simulation()
-        if self.RlEnv:
-            self.RlEnv.close()
-            self.RlEnv = None
-        QApplication.instance().quit()
-        event.accept()
+        self.stop_simulation()
+        super().closeEvent(event)
 
    
     def initUI(self):
@@ -202,7 +256,8 @@ class ActionTimetableEditor(QMainWindow):
 
         # Restart button
         self.restart_button = QPushButton("Restart Simulation", self)
-        self.restart_button.clicked.connect(self.reset_simulation)
+
+        self.restart_button.clicked.connect(lambda: self.simulation_worker.reset_simulation())
         self.toolbar.addWidget(self.restart_button)
 
         #add a speed slider
@@ -307,7 +362,7 @@ class ActionTimetableEditor(QMainWindow):
         self.table_layout.addLayout(self.timeTable_toolbar)
 
         self.table = ExtendedTableWidget(self)
-        self.table.load_action_timetable(self.manual_exp.action_timetable)
+        self.table.load_action_timetable(self.manual_exp.action_timetable)#
         self.table.cellChanged.connect(self.on_table_cell_changed)
         self.table_layout.addWidget(self.table)
 
@@ -404,29 +459,7 @@ class ActionTimetableEditor(QMainWindow):
         #update the timetable
         self.manual_exp.action_timetable = self.table.get_dict()
 
-    def reset_simulation(self):    
-        #check if the simulation is recording
-        if self.RlEnv.simulation.rabbit.is_recording():
-            self.RabbitMesure_widget.TrajRecorder.stop_recording_trajectory()
 
-        print("Resetting simulation...")
-        print(f"Simulation paused: {self.RlEnv}")
-        try:
-            if self.RlEnv and self.isControled_dropdown.currentText() == "Only Simulation":
-                return self.RlEnv.reset()
-            elif self.RlRobot and self.isControled_dropdown.currentText() == "Only Real Robot":
-                return self.RlRobot.reset()
-            elif self.RlEnv and self.RlRobot:
-                obs, inf = self.RlEnv.reset()
-                self.RlRobot.reset()
-                return obs, inf
-            else:
-                print("No Environment or Robot to reset!")
-                return None, None
-        except Exception as e:
-            print(f"--------------------Error in reset_simulation: {e}")
-            self.no_error = False
-            return None, None
 
     def pause_unpause_simulation(self, state=None):
         if state is None:
@@ -438,20 +471,22 @@ class ActionTimetableEditor(QMainWindow):
         pass
 
     def changeControlMode(self):
-        #self.cleanup_simulation()
-        self.env_pause = True
-        time.sleep(0.5)
+        self.stop_simulation()
         if self.controlMode_active.currentText() == "Auto":
             self.close_control_input()
+            if self.loaded_model:
+                self.robot_controler = RobotControler(self.loaded_model)
+            else:
+                self.robot_controler = RobotControler(self.manual_exp)
         elif self.controlMode_active.currentText() == "Body Control":
             self.open_control_input()
-            #self.env_param_kwargs = self.def_RlEnv_param_kwargs
-            ##self.open_RlEnv(self.RlEnv_param_kwargs)
-            #self.start_thread()
+            self.robot_controler = RobotControler(self.control_input)
         else:
             self.open_control_input()
+            self.robot_controler = RobotControler(self.control_input)
+        self.start_simulation()
         
-        self.env_pause = False
+        
 
     def open_control_input(self):
         if self.control_input:
@@ -467,77 +502,43 @@ class ActionTimetableEditor(QMainWindow):
 
 
     def changeWhatIsControlled(self):
-        self.cleanup_simulation()
+        self.stop_simulation()
         
         if self.isControled_dropdown.currentText() == "Only Simulation":
             self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
             self.control_input = None
             self.controlMode_active.setCurrentIndex(2)
             self._init_RlEnv()
+            self.live_time = lambda: self.RlEnv.simulation.rabbit.get_lifetime()
             if hasattr(self, 'RlRobot'):
                 self.RlRobot = None
                 self.RealRabbitMesure_widget = None
             
         elif self.isControled_dropdown.currentText() == "Simulation_Imitation":
             self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
-            
+            self.live_time = lambda: self.RlEnv.simulation.rabbit.get_lifetime()
             self._init_RlEnv() and self._init_RlRobot()
             
         elif self.isControled_dropdown.currentText() == "Only Real Robot":
             if hasattr(self, 'RlEnv'):
                 self.RlEnv = None
             self._init_RlRobot()
-        self.start_thread()
+            self.live_time = lambda: self.RlRobot.rabbit.get_lifetime()
+        self.start_simulation()
 
-    # def open_RlEnv(self, env_param_kwargs):
-    #     self.RlEnv_param_kwargs = env_param_kwargs
-    #     #open a new environment
-    #     self._init_RlEnv()
-    #     self.RlEnv.simulation.hung = True
-    #     self.env_pause = True
+    def simulation_resetting(self):
+        #check if the simulation is recording
+        if not self.env_pause and hasattr(self.RlEnv, "simulation.rabbit") and hasattr(self.RlRobot, "rabbit"):
+            if self.RlEnv.simulation.rabbit.is_recording():
+                self.RabbitMesure_widget.TrajRecorder.stop_recording_trajectory()
 
-    #     #if everything is ok, close the editor window
-    #     if self.env_param_editor:
-    #         self.env_param_editor.close()
-    #         self.env_param_editor = None
-    #         print("env_param_editor closed!")
-
-    # def open_RlRobot(self, RLRobot_param_kwargs):
-    #     self.RLRobot_param_kwargs = RLRobot_param_kwargs
-    #     #open a new environment
-    #     self._init_RlRobot()
-    #     self.env_pause = True
-
-    #     #if everything is ok, close the editor window
-    #     if self.env_param_editor:
-    #         self.env_param_editor.close()
-    #         self.env_param_editor = None
-    #         print("env_param_editor closed!")
-
-    def cleanup_simulation(self):
-        self.end_thread = True
-        self.env_pause = True
-        if self.simulation_thread:
-            self.simulation_thread.join()
-            self.simulation_thread = None
-            
-        if self.RlEnv:
-            self.RlEnv.close()
-            self.RlEnv = None
-        if self.RlRobot:
-            self.RlRobot.close()
-            self.RlRobot = None
-
-
-
-    def start_thread(self):
-        self.simulation_thread = threading.Thread(target=self.run_simulation)
-        self.simulation_thread.start()
-        print("Threat started!")
-
+            if self.RlRobot.rabbit.is_recording():
+                self.RealRabbitMesure_widget.TrajRecorder.stop_recording_trajectory()
+        else:
+            print("stopping recording is not possible, because the simulation is not running or the rabbit is not recording")
 
     def restart_Env_with_new_param(self, env_param_kwargs):
-        self.cleanup_simulation()
+        self.stop_simulation()
         self.RlEnv_param_kwargs = env_param_kwargs
         self.RLRobot_param_kwargs["simulation_Timestep"] = env_param_kwargs["simulation_Timestep"]
 
@@ -553,7 +554,7 @@ class ActionTimetableEditor(QMainWindow):
             result2 = self._init_RlRobot()
             print(f"Simulation_Imitation will be restarted. Restart was {"successful" if result1 and result2 else "not successful"}")
 
-        self.start_thread()
+        self.start_simulation()
         
 
     
@@ -572,6 +573,8 @@ class ActionTimetableEditor(QMainWindow):
             file_path = file_dialog.selectedFiles()[0]
             # Load the model from the selected file
             self.loaded_model = SAC.load(file_path)
+            self.robot_controler = RobotControler(self.loaded_model)
+            
             self.button_mod_active.setChecked(True)
             #change color of the model button
             self.model_loadButton.setStyleSheet("background-color: green")
@@ -668,93 +671,6 @@ class ActionTimetableEditor(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save timetable to {file_name}: {e}")
 
-
-
-    def run_simulation(self):
-        self.no_error = True
-        self.end_thread = False
-        self.IntTimer = TimeInterval(self.time_step)
-        try:
-            obs, inf = self.reset_simulation()
-            if obs is None:
-                print("obs is None Error!!!!!!!!!!!")
-                self.no_error = False
-                return
-                
-            while not self.end_thread and self.no_error:
-                done = False
-                while not done and not self.end_thread and self.no_error:
-                    print("Simulation running-------------")
-                    if not self.env_pause:
-                        if self.controlMode_active.currentText() == "Body Control" and self.control_input is not None: # Body Control (Joystick) is controlling the robot
-                            self.action = self.control_input.get_BodyPose()
-                            print(self.action)
-                        elif self.loaded_model is not None and self.button_mod_active.isChecked():# A RL-Agent is controlling the robot
-                            try:
-                                self.action, pred_info = self.loaded_model.predict(obs)
-                                print("RL-Agent Prediction: ", self.action)
-                            except Exception as e:
-                                self.no_error = False
-                                print(f"Error in model prediction: {e}")
-                        else: #self.controlMode_active.currentText() == "Auto": # Manual Expert is controlling the robot
-                            try:
-                                life_time = self.RlEnv.simulation.rabbit.lifetime if self.isControled_dropdown.currentText() in ["Only Simulation", "Simulation_Imitation"] else self.RlRobot.rabbit.lifetime
-                                self.action, state, action_key = self.manual_exp.think_and_respond(obs, None, done, life_time)
-                                print(self.action)
-                                # Highlight the active row
-                                #action_key_index = list(self.manual_exp.action_timetable.keys()).index(self.manual_exp.action_key)
-                                self.table.highlight_active_row(action_key)
-                            except Exception as e:
-                                print(f"Error in manual response: {e}")
-                                self.no_error = False
-                        #print(action)
-                        try:
-                            if self.isControled_dropdown.currentText() == "Only Simulation":
-                                obs, reward, terminated, truncated, info = self.RlEnv.step(self.action)
-                            elif self.isControled_dropdown.currentText() == "Simulation_Imitation":
-                                _, _, _, _, _ = self.RlRobot.step(self.action)
-                                obs, reward, terminated, truncated, info = self.RlEnv.step(self.action)
-
-                            elif self.isControled_dropdown.currentText() == "Only Real Robot":
-                                obs, reward, terminated, truncated, info = self.RlRobot.step(self.action)
-                            done = (terminated or truncated) and self.auto_reset_checkbox.isChecked()
-
-                            if done:
-                                obs, inf = self.reset_simulation()
-                        except Exception as e:
-                            self.no_error = False
-                            print(f"Error in environment step: {e}")
-                        
-                        self.IntTimer.wait_for_step((1+self.speed_slider.value())*self.time_step)
-                    else:
-                        time.sleep(0.5)
-
-        except Exception as e:
-            print(f"Error in simulation thread: {e}")
-            self.no_error = False
-            
-        finally:
-            if not self.no_error:
-                if self.RlEnv:
-                    self.RlEnv.close()
-                    self.RlEnv = None
-                if self.RlRobot:
-                    self.RlRobot.close()
-                    self.RlRobot = None
-                QMessageBox.critical(self, "Error", "Simulation stopped due to an error!")
-
-        if not self.no_error:
-            # Dialog if there is an error
-            print("Error", "An error occurred! Simulation stopped! Probably the Environment does not fit the model!")
-            # If there is an error, close the environment
-            if self.RlEnv:
-                self.RlEnv.close()
-                self.RlEnv = None
-            if self.RlRobot:
-                self.RlRobot.close()
-                self.RlRobot = None
-            self.end_thread = True
-        time.sleep(0.5)
             
     def copy_to_clipboard(self):
         timetable_str = str(self.manual_exp.action_timetable)
@@ -764,86 +680,15 @@ class ActionTimetableEditor(QMainWindow):
 
     @Slot(str)
     def handle_simulation_error(self, error_msg):
+        print(f"Simulation error: {error_msg}")
         QMessageBox.critical(self, "Simulation Error", error_msg)
-        self.cleanup_simulation()
+        self.stop_simulation()
 
-class ManualExpert:
-    def __init__(self, sim_freq= 5):
-        self.sim_freq = sim_freq
-        self.current_action = [0 for i in range(9)]
-        self.action_key = 0
 
-        #define an action handling list
-        # sprinting v1
-        # self.action_timetable = {
-        #     0:  [-0, 0.0,   -0.5, 0.3,  -0.5, 0.3,    0.2, 0.2],
-        #     0.2:  [1, 0.2,   -0.2, 0.3,   -0.2, 0.3,    -1, -1],
-        #     0.5:  [1, 0.2,   -0.2, -0.4,   -0.2, -0.4,    -1, -1],
-        #     0.6:  [-1, 0.2,   -0.4, 0.7,   -0.4, 0.7,    0.2, 0.2],
-        #     0.7 :  [-1, 0.0,   -0.5, 0.7,   -0.5, 0.7,    0.2, 0.2],
-            
-        #     0.7: [-1, 0,   -0.4, 0,   -0.4, 0,    0, 0]
-        # }
 
-        #balancesprinting
-        #self.action_timetable = {0.0: [-1.0, 0.0, -0.3, 0.3, -0.3, 0.3, 0.7, 0.7], 0.1: [-0.7, 0.0, -0.16, 0.6, -0.16, 0.6, -0.4, -0.4], 0.25: [-0.0, 0.0, 0.2, 0.4, 0.2, 0.4, -0.4, -0.4], 0.35: [0.8, 0.0, -0.1, 0.0, -0.1, 0.0, 0.6, 0.6], 0.5: [-1.0, 0.0, -0.3, 0.5, -0.3, 0.5, 0.65, 0.65], 0.6: [-1.0, 0.0, -0.4, -0.6, -0.4, -0.6, 1.0, 1.0]}
-        #self.action_timetable = {0.0: [-0.9, 0.0, -0.3, 0.2, -0.3, 0.2, 0.7, 0.7], 0.05: [-0.9, 0.0, -0.4, 0.6, -0.4, 0.6, -0.4, -0.4], 0.1: [0.7, 0.0, 0.0, 0.0, 0.0, 0.0, -0.4, -0.4], 0.2: [0.7, 0.0, 0.0, -0.5, 0.0, -0.5, 0.7, 0.7], 0.3: [-0.9, 0.0, -0.1, 0.7, -0.1, 0.7, 0.7, 0.7], 0.5: [-1.0, 0.0, -0.4, -0.6, -0.4, -0.6, 1.0, 1.0]}
-        # sprinting v2
-        # self.action_timetable = {
-        #     0:  [0.2, 0,   -0.4, 0.4,  -0.4, 0.4,    0.3, 0.3],
-        #     0.2:  [1, 0,   -0., 0.4,   -0., 0.4,    -0.7, -0.7],
-        #     0.4:  [1, 0,   -0., -0.6,   -0., -0.6,    -0.7, -0.7],
-        #     0.5:  [-0.8, 0,   -0.1, -0.6,   -0.1, -0.6,    -0.7, -0.7],
-        #     0.6:  [-0.8, 0,   -0.4, 0.7,   -0.4, 0.7,    0.4, 0.4],
-        #     0.7 :  [0.2, 0,   -0.4, 0.4,  -0.4, 0.4,    0.3, 0.3],
-            
-        #     0.7: [-1, 0,   -0.4, 0,   -0.4, 0,    0, 0]
-        # }
 
-        #self.action_timetable = {0.0: [-0.8, 0.0, -0.4, 0.6, -0.4, 0.6, 1.0, 1.0], 0.1: [0.8, 0.0, -0.4, 0.6, -0.4, 0.6, -0.7, -0.7], 0.2: [0.8, 0.0, 0.0, 0.3, 0.0, 0.3, -0.7, -0.7], 0.3: [-0.8, 0.0, -0.4, 0.6, -0.4, 0.6, 1.0, 1.0], 0.5: [-1.0, 0.0, -0.4, -0.6, -0.4, -0.6, -0.7, 0.8]}
-        
-        #other best reallive Expert
-        #self.action_timetable = {0.0: [-0.8, 0.0, -0.0, 0.3, -0.0, 0.3, -1.0, -1.0], 0.2: [-0.3, 0.0, 0.25, 0.3, 0.25, 0.3, -1.0, -1.0], 0.3: [0.2, 0.0, 0.4, -0.6, 0.4, -0.6, 0.4, 0.4], 0.4: [-0.2, 0.0, -0.1, 0.5, -0.1, 0.5, 0.5, 0.5], 0.45: [-0.5, 0.0, -0.1, 0.5, -0.1, 0.5, 0.5, 0.5], 0.6: [-0.5, 0.0, -0.1, 0.3, -0.1, 0.3, 0.5, 0.5], 0.8: [-1.0, 0.0, -0.4, -0.6, -0.4, -0.6, 1.0, 1.0]}
-        
-        #pusch sprint v1
-        #self.action_timetable = {0.0: [-0.5, 0.0, -0.2, 0.4, -0.2, 0.4, -0.5, -0.5], 0.2: [-0.5, 0.0, 0.5, -0.4, 0.5, -0.4, 1.0, 1.0], 0.45: [1.0, 0.0, 0.5, 0.6, 0.5, 0.6, 0.0, 0.0], 0.6: [1.0, 0.0, -0.2, 0.6, -0.2, 0.6, -0.5, -0.5], 0.7: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
 
-        #big jumps
-        #self.action_timetable = {0.0: [0.5, 0.0, -0.2, -0.3, -0.2, -0.3, 0.0, 0.0], 0.25: [0.4, 0.0, -0.2, 0.2, -0.2, 0.2, 0.0, 0.0], 0.5: [0.1, 0.0, -0.8, -0.9, -0.8, -0.9, -0.5, -0.5], 0.75: [1.0, 0.0, 0.1, 0.5, 0.1, 0.5, 0.0, 0.0]}
-        #fast jump Sim
-        #self.action_timetable = {0.0: [0.9, 0.0, -0.3, 0.4, -0.3, 0.4, 0.0, 0.0], 0.25: [0.7, 0.0, -0.5, 0.3, -0.5, 0.3, 0.0, 0.0], 0.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 0.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
-        #Sim Jumps
-        #self.action_timetable = {0.0: [0.8, 0.0, -0.4, 0.2, -0.4, 0.2, 0.0, 0.0], 0.2: [0.1, 0.0, -0.4, 0.5, -0.4, 0.5, -0.7, -0.7], 0.35: [0.1, 0.0, -0.5, -0.2, -0.5, -0.2, -0.7, -0.7], 0.657: [1.0, 0.0, -0.1, 0.5, -0.1, 0.5, 0.0, 0.0]}
-        #slow jumps
-        #self.action_timetable = {0.0: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, 0.0, 0.0], 1.0: [0.5, 0.0, -0.3, 0.4, -0.3, 0.4, -0.5, -0.5], 1.25: [0.1, 0.0, -0.5, 0.3, -0.5, 0.3, -0.5, -0.5], 1.3: [0.1, 0.0, -0.6, 0.0, -0.6, 0.0, -0.5, -0.5], 1.8: [1.0, 0.0, 0.3, 0.4, 0.3, 0.4, -0.5, -0.5]}
-        self.action_timetable =  {0.0: [0.9, 0.0, 0.0, 0.4, 0.0, 0.4, -0.8, -0.8], 0.4: [0.7, 0.0, -0.4, 0.0, -0.4, 0.0, -0.8, -0.8], 0.6: [0.1, 0.0, -0.5, 0.3, -0.5, 0.3, 0.0, 0.0], 1.3: [1.0, 0.0, 0.2, 0.6, 0.2, 0.6, 0.0, 0.0]}                   
-        #Männchen
-        #self.action_timetable = {0.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -1.0, -1.0], 1.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -1.0, -1.0], 2.0: [0.999969482421875, 0.00390625, 0.00390625, 0.999969482421875, 0.00390625, 0.999969482421875, -1.0, -1.0], 3.0: [0.999969482421875, 0.00390625, -0.129425048828125, 0.403900146484375, -0.129425048828125, 0.403900146484375, -1.0, -1.0], 4.0: [0.999969482421875, 0.00390625, -0.62353515625, 0.529388427734375, -0.62353515625, 0.529388427734375, -1.0, -1.0], 5.0: [0.999969482421875, 0.00390625, 0.00390625, 0.450958251953125, 0.00390625, 0.450958251953125, -1.0, -1.0], 6.0: [-0.835296630859375, -0.4039306640625, 0.00390625, 0.01959228515625, 0.00390625, 0.01959228515625, -0.13726806640625, -0.160797119140625], 7.0: [-0.207855224609375, -1.0, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, -0.23138427734375, -0.254913330078125], 8.0: [-0.003936767578125, 0.00390625, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, 0.137237548828125, -0.04315185546875], 9.0: [0.192138671875, 0.999969482421875, 0.00390625, -0.003936767578125, 0.00390625, -0.003936767578125, 0.1607666015625, -0.207855224609375]}
-        
-        #slow jumps
-        #self.action_timetable = {0.0: [-0.003936767578125, 0.0, -0.003936767578125, 0.0, -0.003936767578125, 0.0, -0.160797119140625, -0.160797119140625], 1.0: [0.999969482421875, 0.0, 0.00390625, 0.2, 0.00390625, 0.2, -0.160797119140625, -0.160797119140625], 2.0: [0.5, 0.0, -0.4039306640625, 0.3, -0.4039306640625, 0.3, -1.0, -1.0], 3.0: [0.5, 0.0, -0.5, 0.5, -0.5, 0.5, -0.160797119140625, -0.0902099609375]}
 
-    
-    
-    def think_and_respond(self, obs_, state, done, current_time=0):
-        # Define the action based on the time table
-        action_keytimes = list(self.action_timetable.keys())
-        #get the action which is at the current time step
-        last_time = action_keytimes[-1]
-        
-        #find the next action key
-        if (0 ==last_time):
-            time_in_timetable = 0
-        else:
-            time_in_timetable = current_time % last_time
-        #search nearest key
-        action_key = min(action_keytimes, key=lambda x:abs(x-time_in_timetable))
-
-        action = self.action_timetable[action_key]
-        state = obs_[:-1]
-        action_index = list(self.action_timetable.keys()).index(action_key)
-        print(action_index)
-        return np.array(action), state, action_index
 
 if __name__=="__main__":
     #env = RL_Env(ModelType="SAC", gui=True, render_mode="human", maxSteps=360*5, terrain_type="flat", rewards_type=["stability"], observation_type=["joint_forces", "joint_angles", "rhythm"], simulation_stepSize=5, restriction_2D=False, real_robot=False)

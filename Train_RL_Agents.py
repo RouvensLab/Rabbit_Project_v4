@@ -47,13 +47,13 @@ class AdaptiveLRCallback(BaseCallback):
 
 if __name__ == "__main__":
 
-    show_last_results = False
+    show_last_results = True
 
     #tr_model_replay_buffer_dir = r"expert_trajectories\recorded_data_sprinting_v1"
 
 
     alg_name = "SAC"
-    ModellName = "Disney_Imitation_v8"
+    ModellName = "Disney_Imitation_v14"
     main_dir = r"Models\\" + alg_name + ModellName
     models_dir = os.path.join(main_dir, "models")
     logdir = models_dir+"\\logs"
@@ -69,56 +69,67 @@ if __name__ == "__main__":
         "ModelType": alg_name,
         "RobotType": "Rabbit_v3",
         "rewards_type": ["Disney_Imitation"],
-        "observation_type_stacked": ["head_orientation", "head_linear_acceleration", "joint_angles"],
+        "observation_type_stacked": ["head_orientation", "head_linear_acceleration", "joint_torques"],
         "observation_type_solo": ["phase_signal", "last_action", "User_command"],
-        "observation_noise": 0.01,
+        "observation_noise": 0.001,
         "Horizon_Length": True,
         "obs_time_space": 1.5,
         "simulation_Timestep": 0.2,
-        "terrain_type": "random_terrain",
+        "terrain_type": "flat",
         "different_terrain": False,
         "different_gravity": True,
         "recorded_movement_file_path_dic": {
-                                                "DanceSprint_v1": 3,
-                                                "MännchenStand_v1": 1,
-                                                "SprintBouncy_v1": 5,
-                                                "SprintForward_v1": 4,
-                                                "SprintForward_v2": 4,
-                                                "Standing1": 1,
-                                                # "Standing2": 1,
-                                                # "Standing3": 1,
+                                                #"Expert0_0_v7": 1,
+                                                "Expert0_8_v1": 5,
+                                                "Expert0_8_v2": 5,
+                                                "Expert0_8_v3": 5,
+                                                "Expert0_8_v4": 3,
+                                                "Expert0_8_v5": 3,
+                                                "Expert0_8_v6": 3,
+
                                              },
+        "recorded_movement_file_settings": {
+                                                #"Expert0_0_v7": [0],
+                                                "Expert0_8_v1": [0.8],
+                                                "Expert0_8_v2": [0.8],
+                                                "Expert0_8_v3": [0.8],
+                                                "Expert0_8_v4": [0.8],
+                                                "Expert0_8_v5": [0.8],
+                                                "Expert0_8_v6": [0.8],
+        },
         "reward_weights": {
                     # Imitation
-                    "torso_pos": 1.0,
+                    "torso_pos": 2.0,
                     "torso_orient": 2.0,
-                    "linear_vel_xy": 0.5,
-                    "linear_vel_z": 0.5,
+                    "linear_vel_xy": 1.5,
+                    "linear_vel_z": 1.0,
                     "angular_vel_xy": 0.5,
                     "angular_vel_z": 0.5,
-                    "LegJoint_pos": 5.0,
+                    "LegJoint_pos": 3.0,
                     "LegJoint_vel": 0.5,
-                    "component_coordinates_world": 1.0,
+                    "component_coordinates_world": 2.0,
                     #"Contact": 1.0,
 
                     # Regularization
                     "Joint_torques": 0.15,
                     "Joint_acc": 0.15,
-                    "action_rate": 1.0,
+                    "action_rate": 0.5,
                     "action_acc": 0.05,
 
                     # Survival
-                    "survival": 1.5,
+                    "survival": 1.0,
                 }
     }
 
     if alg_name == "SAC":
+        # the episode length is 110 steps
+        # 
         hyper_params = {
-            "learning_rate": 2*1e-5,#2*1e-5=0.00002
-            "batch_size": 3500,#8192*24,
+            "learning_rate": 3*1e-5,#2*1e-5=0.00002
+            "batch_size": 128*27, #8192*24,
             "buffer_size": 800_000,
-            "policy_kwargs": dict(net_arch=dict(pi=[512, 512], qf=[512, 256])),
-            "gamma" : 0.96
+            "policy_kwargs": dict(net_arch=dict(pi=[512, 256], qf=[512, 256])),
+            "gamma" : 0.97#0.95#typically in range of 0.8 to 0.99
 
         }
 
@@ -142,7 +153,7 @@ if __name__ == "__main__":
     if not show_last_results:
 
         # Make multiprocess env
-        num_cpu = 25 # Adjust the number of CPUs based on your machine
+        num_cpu = 27 # Adjust the number of CPUs based on your machine
         envs = SubprocVecEnv([make_env(i, env_param_kwargs=env_param_kwargs) for i in range(num_cpu)])
 
         #creates a documentation of the model hyperparameter, the environements parameter and other information concearned to the training, in the Model directory.
@@ -192,7 +203,7 @@ if __name__ == "__main__":
                         **hyper_params
                         )
             #load trained SAC policy
-            #model = SAC.load(r"Models\SACDisney_Imitation_v7\models\rl_model_2500000_steps.zip", env=envs, tensorboard_log=logdir)
+            #model = SAC.load(r"Models\SACDisney_Imitation_v11\models\rl_model_1350000_steps.zip", env=envs, tensorboard_log=logdir)
 
         elif alg_name == "PPO":
             from stable_baselines3 import PPO
@@ -215,7 +226,7 @@ if __name__ == "__main__":
     
     else:
         # Load the trained agent
-        model = SAC.load(r"Models\SACDisney_Imitation_v6\models\rl_model_2500000_steps.zip")
+        model = SAC.load(r"Models\SACDisney_Imitation_v14\models\rl_model_2700000_steps.zip")
 
         # Evaluate the agent
         env = RL_Env(render_mode="human", gui=True, **env_param_kwargs)

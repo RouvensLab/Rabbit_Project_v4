@@ -16,6 +16,8 @@ class PhaseGenerator:
 
     def update(self):
         """Update the phase signal."""
+        if self.duration <= 0:
+            return 0  # Avoid division by zero
         self.phase += self.dt / self.duration
         if self.is_periodic:
             self.phase %= 1.0  # Loop phase for walking
