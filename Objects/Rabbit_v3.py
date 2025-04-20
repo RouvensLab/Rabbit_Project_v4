@@ -96,6 +96,13 @@ class Rabbit:
         #reset the robot to the initial position, so that the constraints can be set
         self.reset()
 
+    def apply_random_push(self, force=30):
+        """Apply a random push to the robot
+        force: the force of the push
+        """
+        #apply a random force to the robot
+        p.applyExternalForce(self._id, -1, [np.random.uniform(-force, force), np.random.uniform(-force, force), 0], [0, 0, 0], p.WORLD_FRAME)
+
 
     def set_new_mass(self):
         """Set new masses for every Bodypart (link) of the robot
@@ -125,8 +132,6 @@ class Rabbit:
             for link, weight in links.items():
                 p.changeDynamics(self._id, link, mass=mass*weight*new_total_mass)
         self.reset()
-
-    import pybullet as p
 
     def show_center_of_mass(self):
         """Show the center of mass of the robot"""

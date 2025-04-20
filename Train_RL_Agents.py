@@ -47,13 +47,13 @@ class AdaptiveLRCallback(BaseCallback):
 
 if __name__ == "__main__":
 
-    show_last_results = True
+    show_last_results = False
 
     #tr_model_replay_buffer_dir = r"expert_trajectories\recorded_data_sprinting_v1"
 
 
     alg_name = "SAC"
-    ModellName = "Disney_Imitation_v14"
+    ModellName = "Disney_Imitation_v18"
     main_dir = r"Models\\" + alg_name + ModellName
     models_dir = os.path.join(main_dir, "models")
     logdir = models_dir+"\\logs"
@@ -71,66 +71,71 @@ if __name__ == "__main__":
         "rewards_type": ["Disney_Imitation"],
         "observation_type_stacked": ["head_orientation", "head_linear_acceleration", "joint_torques"],
         "observation_type_solo": ["phase_signal", "last_action", "User_command"],
-        "observation_noise": 0.001,
-        "Horizon_Length": True,
-        "obs_time_space": 1.5,
+        "observation_noise": 0.02,
+        "Horizon_Length": False,
+        "obs_time_space": 0.5,
+        "n_stack": 2,
         "simulation_Timestep": 0.2,
         "terrain_type": "flat",
         "different_terrain": False,
-        "different_gravity": True,
+        "different_gravity": False,
+        "apply_random_push_freq": 0,
         "recorded_movement_file_path_dic": {
-                                                #"Expert0_0_v7": 1,
+                                                # "Expert0_0_v7": 1,
                                                 "Expert0_8_v1": 5,
-                                                "Expert0_8_v2": 5,
-                                                "Expert0_8_v3": 5,
-                                                "Expert0_8_v4": 3,
-                                                "Expert0_8_v5": 3,
-                                                "Expert0_8_v6": 3,
+                                                # "Expert0_8_v2": 5,
+                                                # "Expert0_8_v3": 5,
+                                                # "Expert0_8_v4": 3,
+                                                # "Expert0_8_v5": 3,
+                                                # "Expert0_8_v6": 3,
 
                                              },
         "recorded_movement_file_settings": {
-                                                #"Expert0_0_v7": [0],
+                                                # "Expert0_0_v7": [0],
                                                 "Expert0_8_v1": [0.8],
-                                                "Expert0_8_v2": [0.8],
-                                                "Expert0_8_v3": [0.8],
-                                                "Expert0_8_v4": [0.8],
-                                                "Expert0_8_v5": [0.8],
-                                                "Expert0_8_v6": [0.8],
+                                                # "Expert0_8_v2": [0.8],
+                                                # "Expert0_8_v3": [0.8],
+                                                # "Expert0_8_v4": [0.8],
+                                                # "Expert0_8_v5": [0.8],
+                                                # "Expert0_8_v6": [0.8],
         },
         "reward_weights": {
                     # Imitation
-                    "torso_pos": 2.0,
-                    "torso_orient": 2.0,
-                    "linear_vel_xy": 1.5,
-                    "linear_vel_z": 1.0,
-                    "angular_vel_xy": 0.5,
-                    "angular_vel_z": 0.5,
-                    "LegJoint_pos": 3.0,
-                    "LegJoint_vel": 0.5,
-                    "component_coordinates_world": 2.0,
+                    "torso_pos": 0,
+                    "torso_orient": 0,
+                    "linear_vel_xy": 0,
+                    "linear_vel_z": 0,
+                    "angular_vel_xy": 0,
+                    "angular_vel_z": 0,
+                    "LegJoint_pos": 0.5,
+                    "LegJoint_vel": 0.05,
+                    "component_coordinates_world": 0,
                     #"Contact": 1.0,
 
                     # Regularization
-                    "Joint_torques": 0.15,
-                    "Joint_acc": 0.15,
-                    "action_rate": 0.5,
-                    "action_acc": 0.05,
+                    "Joint_torques": 0.05,
+                    "Joint_acc": 0.05,
+                    "action_rate": 0.05,
+                    "action_acc": 0.01,
 
                     # Survival
-                    "survival": 1.0,
+                    "survival": 0.1,
                 }
     }
 
     if alg_name == "SAC":
-        # the episode length is 110 steps
-        # 
+        # One episode consists of 110 steps, and there are 25 environments
         hyper_params = {
-            "learning_rate": 3*1e-5,#2*1e-5=0.00002
-            "batch_size": 128*27, #8192*24,
-            "buffer_size": 800_000,
-            "policy_kwargs": dict(net_arch=dict(pi=[512, 256], qf=[512, 256])),
-            "gamma" : 0.97#0.95#typically in range of 0.8 to 0.99
-
+            "learning_rate": 2e-4,  # A common starting point for SAC
+            "batch_size": 256,  # A reasonable batch size for SAC
+            "buffer_size": 1_000_000,  # Large enough to store experience from multiple environments
+            "policy_kwargs": dict(net_arch=dict(pi=[512, 256], qf=[512, 256])),  # Standard network architecture
+            "gamma": 0.99,  # Discount factor, typically close to 1 for long-term rewards
+            "train_freq": 1,  # Train the policy every step
+            "gradient_steps": 1,  # Perform one gradient step per training step
+            "ent_coef": "auto",  # Automatically tune the entropy coefficient
+            "learning_starts": 10_000,  # Start learning after collecting some experience
+            "target_entropy": "auto",  # Automatically set target entropy
         }
 
     elif alg_name == "PPO":
@@ -153,7 +158,7 @@ if __name__ == "__main__":
     if not show_last_results:
 
         # Make multiprocess env
-        num_cpu = 27 # Adjust the number of CPUs based on your machine
+        num_cpu = 25 # Adjust the number of CPUs based on your machine
         envs = SubprocVecEnv([make_env(i, env_param_kwargs=env_param_kwargs) for i in range(num_cpu)])
 
         #creates a documentation of the model hyperparameter, the environements parameter and other information concearned to the training, in the Model directory.
@@ -194,16 +199,17 @@ if __name__ == "__main__":
         if alg_name == "SAC":
             from stable_baselines3 import SAC
             # #load pre-trained PPO policy
-            model = SAC("MlpPolicy", envs,
-                        tensorboard_log=logdir,
-                        device='cuda',
-                        verbose=1,
-                        # rollout_buffer_class=startReplayBuffer,
-                        # rollout_buffer_kwargs=dict(demonstrations=exp_rollouts, demonstrations_wight=13),
-                        **hyper_params
-                        )
+            # model = SAC("MlpPolicy", envs,
+            #             tensorboard_log=logdir,
+            #             device='cuda',
+            #             verbose=1,
+                        
+            #             # rollout_buffer_class=startReplayBuffer,
+            #             # rollout_buffer_kwargs=dict(demonstrations=exp_rollouts, demonstrations_wight=13),
+            #             **hyper_params
+            #             )
             #load trained SAC policy
-            #model = SAC.load(r"Models\SACDisney_Imitation_v11\models\rl_model_1350000_steps.zip", env=envs, tensorboard_log=logdir)
+            model = SAC.load(r"Models\SACDisney_Imitation_SteadyStand_v1\models\rl_model_1250000_steps.zip", env=envs, tensorboard_log=logdir)
 
         elif alg_name == "PPO":
             from stable_baselines3 import PPO

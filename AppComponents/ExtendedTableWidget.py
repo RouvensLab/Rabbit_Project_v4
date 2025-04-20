@@ -4,7 +4,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt,QSettings, QThread, Signal, Slot
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QFont
+from PySide6.QtCore import QUrl
+from PySide6.QtWidgets import QLineEdit, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QTabWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QLineEdit, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox
 
+import numpy as np
 
 class ExtendedTableWidget(QTableWidget):
     """Table with extendable rows."""
@@ -111,4 +117,163 @@ class ExtendedTableWidget(QTableWidget):
         self.setHorizontalHeaderLabels(['Time', 'Action1', 'Action2', 'Action3', 'Action4', 'Action5', 'Action6', 'Action7', 'Action8'])
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.insert_empty_row()
+
+
+class RL_Input_And_Output_Widget(QWidget):
+    """This is a widget that shows the input and output of the RL agent. It can be implemented in every QApplication window.
+
+    It is structured like following:
+    +---------------------+
+    | RL Input            |
+    +---------------------+
+    Arrow down
+    +---------------------+
+    | RL Output/Action    |
+    +---------------------+
+    Arrow down
+    +---------------------+
+    | Reward, scoor(inf)  |
+    +---------------------+
+
+    RL Input: This is a table that shows the observation of the RL agent.
+    RL Output/Action: This is a table that shows the action of the RL agent that will be feed into the environment.
+    Reward, scoor(inf): This is a table that shows the reward and score of the RL agent.
+
+    There will be a function for each table to update the data in the table.
+    """    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        # Main layout
+        self.main_layout = QVBoxLayout()
+        self.setLayout(self.main_layout)
+        
+        # Initialize tables
+        self.input_table = QTableWidget()
+        self.output_table = QTableWidget()
+        self.reward_table = QTableWidget()
+        
+        # Add arrow labels between tables
+        self.arrow1 = QLabel("↓")
+        self.arrow2 = QLabel("↓")
+        self.arrow1.setAlignment(Qt.AlignCenter)
+        self.arrow2.setAlignment(Qt.AlignCenter)
+        self.arrow1.setFont(QFont("Arial", 16, QFont.Bold))
+        self.arrow2.setFont(QFont("Arial", 16, QFont.Bold))
+        
+        # Add widgets to layout
+        self._setup_table(self.input_table, "RL Input")
+        self.main_layout.addWidget(self.input_table)
+        self.main_layout.addWidget(self.arrow1)
+        self._setup_table(self.output_table, "RL Output/Action")
+        self.main_layout.addWidget(self.output_table)
+        self.main_layout.addWidget(self.arrow2)
+        self._setup_table(self.reward_table, "Reward/Score")
+        self.main_layout.addWidget(self.reward_table)
+        
+        # Set size policy
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+    def _setup_table(self, table, title):
+        """Initialize a table with a title header."""
+        table.setColumnCount(2)
+        table.setRowCount(0)
+        table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        table.horizontalHeader().setStretchLastSection(True)
+        #make them not editable
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+
+        # Add title as a label above the table
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Arial", 12, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        self.main_layout.addWidget(title_label)
+        
+    def update_input_table(self, observations):
+        """Update the RL Input table with observation data.
+        
+        Args:
+            observations: Dict or list of tuples containing parameter-value pairs
+        """
+        self._update_table(self.input_table, observations)
+        
+    def update_output_table(self, actions):
+        """Update the RL Output/Action table with action data.
+        
+        Args:
+            actions: Dict or list of tuples containing parameter-value pairs
+        """
+        self._update_table(self.output_table, actions)
+        
+    def update_reward_table(self, rewards):
+        """Update the Reward/Score table with reward data.
+        
+        Args:
+            rewards: Dict or list of tuples containing parameter-value pairs
+        """
+        self._update_table(self.reward_table, rewards)
+        
+    def _update_table(self, table, data):
+        """Generic method to update table content.
+        
+        Args:
+            table: QTableWidget to update
+            data: Dict or list of tuples containing parameter-value pairs
+        """
+        # Clear existing content
+        #table.setRowCount(0)
+
+        if isinstance(data, dict):
+            # Convert dict to list of tuples
+            headers = list(data.keys())
+            data = list(data.values())
+            table.setHorizontalHeaderLabels(headers)
+
+        # Set new row count
+        table.setRowCount(1)
+        table.setColumnCount(len(data))
+        
+        # Fill table
+        for column, value in enumerate(data):
+            table.setItem(0, column, QTableWidgetItem(str(value)))            
+            
+        # Adjust column widths
+        #table.resizeColumnsToContents()
+        table.resizeRowsToContents()
+        
+    def clear_tables(self):
+        """Clear all tables."""
+        self.input_table.setRowCount(0)
+        self.output_table.setRowCount(0)
+        self.reward_table.setRowCount(0)
+
+
+if __name__ == "__main__":
+    import sys
+    app = QApplication(sys.argv)
+    window = QWidget()
+    layout = QVBoxLayout(window)
+    
+    # Create and add the RL Input and Output widget
+    rl_widget = RL_Input_And_Output_Widget()
+    layout.addWidget(rl_widget)
+    
+    # Show the window
+    window.setWindowTitle("RL Input and Output Widget")
+    window.resize(400, 300)
+    window.show()
+    
+    # Example data to update the tables
+    observations =[0, 0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 5]
+    actions = [0, 0, 0, 0.2, -0.1, 0.5, 0.3, 0.1, 0.4]
+    rewards = {"Reward": 10, "Score": 100}
+    
+    # Update tables with example data
+    rl_widget.update_input_table(observations)
+    rl_widget.update_output_table(actions)
+    rl_widget.update_reward_table(rewards)
+    
+    sys.exit(app.exec())
+
         

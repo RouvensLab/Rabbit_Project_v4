@@ -27,32 +27,33 @@ class RL_Env(RL_Base):
                 terrain_type = "random_terrain",
                 different_terrain = False,
                 different_gravity = False,
+                apply_random_push_freq = 0,
                 restriction_2D = False,
                 
                 real_robot = False,
 
                 reward_weights = {
-                # Imitation
-                "torso_pos": 2.5,
-                "torso_orient": 2.0,
-                "linear_vel_xy": 0.5,
-                "linear_vel_z": 0.5,
-                "angular_vel_xy": 0.5,
-                "angular_vel_z": 0.5,
-                "LegJoint_pos": 3.0,
-                "LegJoint_vel": 0.25,
-                "component_coordinates_world": 2.0,
-                #"Contact": 1.0,
+                    # Imitation
+                    "torso_pos": 0.3,
+                    "torso_orient": 0.3,
+                    "linear_vel_xy": 0.05,
+                    "linear_vel_z": 0.05,
+                    "angular_vel_xy": 0.025,
+                    "angular_vel_z": 0.025,
+                    "LegJoint_pos": 0.5,
+                    "LegJoint_vel": 0.05,
+                    "component_coordinates_world": 0.2,
+                    #"Contact": 1.0,
 
-                # Regularization
-                "Joint_torques": 0.15,
-                "Joint_acc": 0.15,
-                "action_rate": 1.0,
-                "action_acc": 0.05,
+                    # Regularization
+                    "Joint_torques": 0.02,
+                    "Joint_acc": 0.03,
+                    "action_rate": 0.05,
+                    "action_acc": 0.01,
 
-                # Survival
-                "survival": 1.5,
-            },
+                    # Survival
+                    "survival": 0.15,
+                },
                 **kwargs
                 ):
         super(RL_Env, self).__init__()
@@ -67,6 +68,7 @@ class RL_Env(RL_Base):
         self.restriction_2D = restriction_2D
         self.different_terrain = different_terrain
         self.different_gravity = different_gravity
+        self.apply_random_push_freq = apply_random_push_freq
 
         self.reward_weights = reward_weights
 
@@ -109,20 +111,16 @@ class RL_Env(RL_Base):
         """
         #calculate the difference between the agent and the expert
         diff = np.array(expert_pos) - np.array(agent_pos)
-        #calculate the angle between the agent and the expert
-        angle = math.atan2(diff[1], diff[0]) + math.pi/2
-        #calculate the difference between the agent and the expert orientation
-        #diff_orient = agent_orient[2]# - expert_orient[2]
-        #calculate the difference between the agent and the expert orientation
-        #angle_orient = math.atan2(math.sin(diff_orient), math.cos(diff_orient))/math.pi
+        #calculate the angle of the difference vector
+        angle_vec = math.atan2(diff[1], diff[0]) - math.pi/2
 
-        diff_angle = agent_orient[2] - angle
+        diff_angle = agent_orient[2] - angle_vec
         
         #get v_x, v_y, from the perspective of the agent
         v_x = np.linalg.norm(diff)
-        return [v_x, diff_angle], [0, 0, angle]
+        return [v_x, diff_angle], [0, 0, angle_vec]
     
-    def calculate_reward(self): 
+    def calculate_reward(self):
         if "Disney_Imitation" in self.RewardsType:            
             # Weights from the provided reward function
 
@@ -153,15 +151,15 @@ class RL_Env(RL_Base):
             
             self.simulation.show_Points([expert_position, base_position], color=[0, 1, 0])
             # Imitation
-            r_imitation += reverse_exp_reward(5, base_position, expert_position, self.reward_weights["torso_pos"])
-            r_imitation += reverse_exp_reward(25, base_orientation, expert_orientation, self.reward_weights["torso_orient"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(15, base_position, expert_position, self.reward_weights["torso_pos"], normalize_value=1)
+            r_imitation += reverse_exp_reward(20, base_orientation, expert_orientation, self.reward_weights["torso_orient"], normalize_value=math.pi)
             #for the component cooddinates
-            r_imitation += reverse_exp_reward(5, component_coordinates_world, expert_component_coordinates_world, self.reward_weights["component_coordinates_world"], normalize_value=10)
+            r_imitation += reverse_exp_reward(7, component_coordinates_world, expert_component_coordinates_world, self.reward_weights["component_coordinates_world"], normalize_value=10)
             r_imitation += reverse_exp_reward(0.5, base_linear_velocity[:2], expert_linear_velocity[:2], self.reward_weights["linear_vel_xy"])
             r_imitation += reverse_exp_reward(5, base_linear_velocity[2], expert_linear_velocity[2], self.reward_weights["linear_vel_z"])
             r_imitation += reverse_exp_reward(0.5, base_angular_velocity[:2], expert_angular_velocity[:2], self.reward_weights["angular_vel_xy"], normalize_value=math.pi)
             r_imitation += reverse_exp_reward(5, base_angular_velocity[2], expert_angular_velocity[2], self.reward_weights["angular_vel_z"], normalize_value=math.pi)
-            r_imitation += reverse_exp_reward(25, joint_angles, expert_joint_angles, self.reward_weights["LegJoint_pos"], normalize_value=math.pi)
+            r_imitation += reverse_exp_reward(20, joint_angles, expert_joint_angles, self.reward_weights["LegJoint_pos"], normalize_value=math.pi)
             r_imitation += reverse_exp_reward(0.5, joint_velocities, expert_joint_velocities, self.reward_weights["LegJoint_vel"], normalize_value=8.79/180*math.pi)
             #contact !!!
 
@@ -246,12 +244,12 @@ class RL_Env(RL_Base):
         #Single observations
         #add phase_signal
         observation_solo = np.array([])
-        if "phase_signal" in self.observation_type_solo:
-            observation_solo = np.concatenate([observation_solo, [self.phase_generator.update()]])
         if "last_action" in self.observation_type_solo:
             observation_solo = np.concatenate([observation_solo, self.current_action])
         if "User_command" in self.observation_type_solo:
             observation_solo = np.concatenate([observation_solo, np.clip([self.User_command[0], self.User_command[1]/math.pi], -1, 1)])
+        if "phase_signal" in self.observation_type_solo:
+            observation_solo = np.concatenate([observation_solo, [self.phase_generator.update()]])
         return super().get_observation(stacked_obs, observation_solo)
 
     def step(self, action):
@@ -261,6 +259,11 @@ class RL_Env(RL_Base):
         self.current_action = action        
         # Execute one time step within the environment
         self.simulation.rabbit.send_goal_pose(action)
+
+        #apply a random push/force to the rabbit
+        if self.apply_random_push_freq != 0 and self.n_steps % self.apply_random_push_freq == 0:
+            self.simulation.rabbit.apply_random_push(force=40)
+
         #simulate the environment
         self.simulation.Sim_step()
 
@@ -280,7 +283,7 @@ class RL_Env(RL_Base):
 
             #show the user command
             lenght = self.User_command[0]
-            angle = self.User_command[1] + User_orient[2] + math.pi/2
+            angle = User_orient[2] + math.pi/2
             x = np.cos(angle) * lenght
             y = np.sin(angle) * lenght
             command_vector = np.array([x, y, 0])

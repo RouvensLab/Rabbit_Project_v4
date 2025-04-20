@@ -44,7 +44,8 @@ class SimulationWorker(QObject):
     error = Signal(str)
     observation_trans = Signal(object)  # Emit observations to the main thread
     action_trans = Signal(object)  # Emit actions to the main thread
-    reset_done = Signal()
+    env_feedback_trans = Signal(dict)  # Emit feedback to the main thread
+    reset_done_trans = Signal()
 
     def __init__(self, rl_env:RL_Env, rl_robot:RL_Robot, robot_controler:RobotControler, live_time: callable, time_step, control_mode: callable, isControlled: callable, auto_reset: callable, env_pause: callable, speed:callable=lambda: 1.0):
         super().__init__()
@@ -69,7 +70,7 @@ class SimulationWorker(QObject):
 
     def reset_simulation(self):    
         #emit reset signal to the main thread
-        self.reset_done.emit()
+        self.reset_done_trans.emit()
 
         # Reset the environment and robot
         print("Resetting simulation. . .")        
@@ -105,19 +106,20 @@ class SimulationWorker(QObject):
 
                         try:
                             if self.isControlled() == "Only Simulation":
-                                self.obs, _, terminated, truncated, _ = self.RlEnv.step(self.action)
+                                self.obs, reward, terminated, truncated, info = self.RlEnv.step(self.action)
                             elif self.isControlled() == "Simulation_Imitation":
                                 _, _, _, _, _ = self.RlRobot.step(self.action)
                                 self.obs, reward, terminated, truncated, info = self.RlEnv.step(self.action)
 
                             elif self.isControlled() == "Only Real Robot":
-                                self.obs, _, terminated, truncated, _ = self.RlRobot.step(self.action)
+                                self.obs, reward, terminated, truncated, info = self.RlRobot.step(self.action)
                             done = (terminated or truncated) and self.auto_reset
                             self.observation_trans.emit(self.obs)
+                            self.env_feedback_trans.emit({"reward": reward, "terminated": terminated, "truncated": truncated, "info": info})
 
                             if done:
-                                self.reset_done.emit()
-                                self.obs, inf = self.reset_simulation()
+                                self.reset_done_trans.emit()
+                                self.obs, info = self.reset_simulation()
 
                         except Exception as e:
                             self.no_error = False

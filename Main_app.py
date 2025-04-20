@@ -8,7 +8,7 @@ import traceback
 import numpy as np
 from PySide6.QtWidgets import (
     QApplication,  QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,QStatusBar,
-    QPushButton, QHeaderView, QMessageBox, QSlider, QFileDialog, QLabel, QCheckBox, QComboBox, QMainWindow, QTabWidget, QLineEdit,QStyleFactory
+    QPushButton, QHeaderView, QMessageBox, QSlider, QFileDialog, QLabel, QCheckBox, QComboBox, QMainWindow, QTabWidget, QLineEdit,QStyleFactory, QSplitter
 )
 from PySide6.QtGui import QIcon,QPalette, QColor
 from PySide6.QtCore import Qt, QSettings, QThread, Signal, Slot, QObject
@@ -20,7 +20,7 @@ from tools.Controler import ControlInput
 
 from tools.Trajectory import TrajectoryRecorder
 
-from AppComponents.ExtendedTableWidget import ExtendedTableWidget
+from AppComponents.ExtendedTableWidget import ExtendedTableWidget, RL_Input_And_Output_Widget
 from AppComponents.EnvParameterEditor import EnvParameterEditor
 from AppComponents.FolderWidget import FolderWidget
 
@@ -204,9 +204,10 @@ class ActionTimetableEditor(QMainWindow):
         self.simulation_worker.finished.connect(self.simulation_worker.deleteLater)
         self.simulation_thread.finished.connect(self.simulation_thread.deleteLater)
         self.simulation_worker.error.connect(self.handle_simulation_error)
-        #self.simulation_worker.observation.connect(self.update_observation)
-        #self.simulation_worker.action.connect(self.update_action)
-        self.simulation_worker.reset_done.connect(self.simulation_resetting)
+        self.simulation_worker.observation_trans.connect(self.sequenceObserver_widget.update_input_table)
+        self.simulation_worker.action_trans.connect(self.sequenceObserver_widget.update_output_table)
+        self.simulation_worker.env_feedback_trans.connect(self.sequenceObserver_widget.update_reward_table)
+        self.simulation_worker.reset_done_trans.connect(self.simulation_resetting)
 
         self.simulation_thread.started.connect(self.simulation_worker.run)
         self.simulation_thread.start()
@@ -344,6 +345,13 @@ class ActionTimetableEditor(QMainWindow):
         bar_layout.addLayout(real_robot_layout)
         control_layout.addLayout(bar_layout)
 
+
+
+
+
+        # Splittet layout that contains the table_layout and SequencObserver_layout
+        splitter = QSplitter(Qt.Vertical)
+
         # Table for action timetable
         self.table_layout = QVBoxLayout()
         def_timeTable_name = "Action Timetable"
@@ -362,11 +370,36 @@ class ActionTimetableEditor(QMainWindow):
         self.table_layout.addLayout(self.timeTable_toolbar)
 
         self.table = ExtendedTableWidget(self)
-        self.table.load_action_timetable(self.manual_exp.action_timetable)#
+        self.table.load_action_timetable(self.manual_exp.action_timetable)
         self.table.cellChanged.connect(self.on_table_cell_changed)
         self.table_layout.addWidget(self.table)
 
-        layout1.addLayout(self.table_layout, stretch=3)
+
+        # Create a QWidget for the table layout and set its layout
+        table_widget = QWidget()
+        table_widget.setLayout(self.table_layout)
+        splitter.addWidget(table_widget)
+
+        # Sequence Observer layout
+        self.sequenceObserver_layout = QVBoxLayout()
+        self.sequenceObserver_layout.addWidget(QLabel("Sequence Observer"))
+        self.sequenceObserver_widget = RL_Input_And_Output_Widget(self)
+        self.sequenceObserver_layout.addWidget(self.sequenceObserver_widget)
+
+        # Create a QWidget for the sequence observer layout and set its layout
+        sequence_observer_widget = QWidget()
+        sequence_observer_widget.setLayout(self.sequenceObserver_layout)
+        splitter.addWidget(sequence_observer_widget)
+
+        # Set the initial splitter sizes to make table_layout use 2x more space
+        splitter.setStretchFactor(0, 4)
+        splitter.setStretchFactor(1, 1)
+
+        # Add the splitter to the main layout
+        layout1.addWidget(splitter, stretch=3)
+
+
+
 
         # Add Buttons
         button_layout = QVBoxLayout()
