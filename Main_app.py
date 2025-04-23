@@ -3,8 +3,7 @@ import time
 import os
 import json
 
-import threading
-import traceback
+import math
 import numpy as np
 from PySide6.QtWidgets import (
     QApplication,  QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,QStatusBar,
@@ -50,17 +49,18 @@ class ActionTimetableEditor(QMainWindow):
 
         self.def_RlEnv_param_kwargs = {
         "ModelType": "SAC",
-        "rewards_type": ["Disney_Imitation"],
+        "rewards_type": [],
         "observation_type_stacked": [],
         "observation_type_solo": ["phase_signal"],
-        "terrain_type": "flat",
-        "different_gravity": False,
         "Horizon_Length": True,
-        "recorded_movement_file_path_dic": {"Expert0_8_v1": 5,
-                                            "Expert0_8_v2": 5,
-                                            "Expert0_8_v3": 5,},
+        "recorded_movement_file_path_dic": {},
         "restriction_2D": False,
         "simulation_Timestep": 0.1,
+        "terrain_type": "flat",
+        "different_terrain": False,
+        "different_gravity": False,
+        "apply_random_push_freq": 25,
+        "different_startingOrientation": 0,
     }
         self.RlEnv_param_kwargs = self.def_RlEnv_param_kwargs
         self.RlEnv_startup_parms = {"render_mode": "fast", "real_robot": False, "gui": True, "RobotType":"Rabbit_v3_mesured"}
@@ -508,15 +508,15 @@ class ActionTimetableEditor(QMainWindow):
         if self.controlMode_active.currentText() == "Auto":
             self.close_control_input()
             if self.loaded_model:
-                self.robot_controler = RobotControler(self.loaded_model)
+                self.robot_controler.change_controler(self.loaded_model)
             else:
-                self.robot_controler = RobotControler(self.manual_exp)
+                self.robot_controler.change_controler(self.manual_exp)
         elif self.controlMode_active.currentText() == "Body Control":
             self.open_control_input()
-            self.robot_controler = RobotControler(self.control_input)
+            self.robot_controler.change_controler(self.control_input)
         else:
             self.open_control_input()
-            self.robot_controler = RobotControler(self.control_input)
+            self.robot_controler.change_controler(self.control_input)
         self.start_simulation()
         
         
@@ -561,7 +561,7 @@ class ActionTimetableEditor(QMainWindow):
 
     def simulation_resetting(self):
         #check if the simulation is recording
-        if not self.env_pause and hasattr(self.RlEnv, "simulation.rabbit") and hasattr(self.RlRobot, "rabbit"):
+        if hasattr(self.RlEnv, "simulation.rabbit") and hasattr(self.RlRobot, "rabbit"):
             if self.RlEnv.simulation.rabbit.is_recording():
                 self.RabbitMesure_widget.TrajRecorder.stop_recording_trajectory()
 
@@ -606,7 +606,7 @@ class ActionTimetableEditor(QMainWindow):
             file_path = file_dialog.selectedFiles()[0]
             # Load the model from the selected file
             self.loaded_model = SAC.load(file_path)
-            self.robot_controler = RobotControler(self.loaded_model)
+            self.robot_controler.change_controler(self.loaded_model)
             
             self.button_mod_active.setChecked(True)
             #change color of the model button
@@ -655,9 +655,9 @@ class ActionTimetableEditor(QMainWindow):
                 recTrajectory.load_trajectory(file_name, folder_path)
                 #get the keys of the trajectory
                 keys = recTrajectory.get_keys()
-                if "actions" in keys:
+                if "action" in keys:
                     #load the actions to the timetable
-                    actions = recTrajectory.get_keyValues("actions")
+                    actions = recTrajectory.get_keyValues("action")
                     times = recTrajectory.get_times()
                     #concatenate the times and actions
                     time_table_dic = dict(zip(times, actions))

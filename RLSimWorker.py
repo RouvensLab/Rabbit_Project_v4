@@ -6,6 +6,7 @@ from Manual_Expert import ManualExpert
 from tools.Controler import ControlInput
 
 from tools.TimeInterval import TimeInterval
+import threading
 
 class RobotControler(QObject):
     return_feedback = Signal(int)  # Emit the row number to highlight in the table
@@ -13,30 +14,38 @@ class RobotControler(QObject):
     def __init__(self, controling_class):
         super().__init__()
         self.controling_class = controling_class
+        self.lock = threading.Lock()  # Lock to ensure thread safety
+
+    def change_controler(self, controler):
+        """Change the controler of the robot"""
+        with self.lock:  # Acquire the lock to prevent concurrent access
+            self.controling_class = controler
 
     def get_actions(self, obs, life_time, done):
-        if isinstance(self.controling_class, ControlInput):
-            self.action = self.controling_class.get_BodyPose()
-            #print(self.action)
-        elif isinstance(self.controling_class, ManualExpert): # Manual Expert is controlling the robot
-            self.action, _, action_key = self.controling_class.think_and_respond(obs, None, done, life_time)
-            print(self.action)
-            # Highlight the active row
-            #action_key_index = list(self.manual_exp.action_timetable.keys()).index(self.manual_exp.action_key)
-            self.return_feedback.emit(action_key)  # Emit the row number to highlight in the table
+        with self.lock:  # Acquire the lock to ensure thread safety
+            if isinstance(self.controling_class, ControlInput):
+                self.action = self.controling_class.get_BodyPose()
+                #print(self.action)
+            elif isinstance(self.controling_class, ManualExpert): # Manual Expert is controlling the robot
+                self.action, _, action_key = self.controling_class.think_and_respond(obs, None, done, life_time)
+                print(self.action)
+                # Highlight the active row
+                #action_key_index = list(self.manual_exp.action_timetable.keys()).index(self.manual_exp.action_key)
+                self.return_feedback.emit(action_key)  # Emit the row number to highlight in the table
 
-        else:# A RL-Agent is controlling the robot
-            self.action, _ = self.controling_class.predict(obs)
-            print("RL-Agent Prediction: ", self.action)
-        return self.action
-    
+            else: # A RL-Agent is controlling the robot
+                self.action, _ = self.controling_class.predict(obs)
+                print("RL-Agent Prediction: ", self.action)
+            return self.action
+
     def close(self):
-        if isinstance(self.controling_class, ControlInput):
-            self.controling_class.close()
-        elif isinstance(self.controling_class, ManualExpert):
-            self.controling_class = None
-        else:
-            self.controling_class = None
+        with self.lock:  # Acquire the lock to ensure thread safety
+            if isinstance(self.controling_class, ControlInput):
+                self.controling_class.close()
+            elif isinstance(self.controling_class, ManualExpert):
+                self.controling_class = None
+            else:
+                self.controling_class = None
         
 
 class SimulationWorker(QObject):
@@ -54,11 +63,11 @@ class SimulationWorker(QObject):
         self.robot_controler = robot_controler
 
         self.time_step = time_step
-        self.live_time = live_time
         self.control_mode = control_mode
+
+
+        self.live_time = live_time
         self.auto_reset = auto_reset
-
-
         self.isControlled = isControlled
         self.running = True
         self.env_pause = env_pause
@@ -113,9 +122,9 @@ class SimulationWorker(QObject):
 
                             elif self.isControlled() == "Only Real Robot":
                                 self.obs, reward, terminated, truncated, info = self.RlRobot.step(self.action)
-                            done = (terminated or truncated) and self.auto_reset
+                            done = (terminated or truncated) and self.auto_reset()
                             self.observation_trans.emit(self.obs)
-                            self.env_feedback_trans.emit({"reward": reward, "terminated": terminated, "truncated": truncated, "info": info})
+                            self.env_feedback_trans.emit({"reward": reward, "terminated": terminated, "truncated": truncated, **info})
 
                             if done:
                                 self.reset_done_trans.emit()

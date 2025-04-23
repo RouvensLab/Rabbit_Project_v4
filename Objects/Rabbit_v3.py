@@ -101,7 +101,7 @@ class Rabbit:
         force: the force of the push
         """
         #apply a random force to the robot
-        p.applyExternalForce(self._id, -1, [np.random.uniform(-force, force), np.random.uniform(-force, force), 0], [0, 0, 0], p.WORLD_FRAME)
+        p.applyExternalForce(self._id, -1, [np.random.uniform(-force, force), np.random.uniform(-force, force), np.random.uniform(-force, force)], [0, 0, 0], p.WORLD_FRAME)
 
 
     def set_new_mass(self):
@@ -196,14 +196,17 @@ class Rabbit:
     def check_delicate_collision(self, ground_id):
         """Check if certain links collide with the ground
         """
-        links_true = [14, 17, 6, 5]
+        links_true = [14, 17, 6, 5,11, 2]
         #the rest should be false
         links_false = [i for i in range(p.getNumJoints(self._id)) if i not in links_true]
+        # print("BodyIndex:" , self._id, "GroundID:", ground_id)
+        # print("ContactPoints: ", p.getContactPoints(self._id, ground_id))
         for l in links_false:
             #check if the link collides with the ground
             collision = p.getContactPoints(self._id, ground_id, l)
             #print("collision:", collision)
-            if isinstance(collision, list) and len(collision) > 0:
+            if collision != ():
+                #print("Collision detected between link", l, "and ground")
                 return True
         return False
 
@@ -265,8 +268,8 @@ class Rabbit:
             raise ValueError("The list with the motor values has to have 12 values, but has ", len(motors_12_value))
         
         if any(isinstance(value, float) or isinstance(value, int) for value in motors_12_value):
-            return [(motors_12_value[0] - motors_12_value[3]) / 2, 
-                    (motors_12_value[1] - motors_12_value[2]) / 2,
+            return [motors_12_value[0], 
+                    motors_12_value[1],
 
 
                     motors_12_value[4], 
@@ -276,7 +279,7 @@ class Rabbit:
                     motors_12_value[8],
 
 
-                    motors_12_value[10], 
+                    motors_12_value[10],
                     motors_12_value[11]
                     
                     ]
@@ -308,7 +311,7 @@ class Rabbit:
             raise ValueError("The list with the motor values has to have 8 values. But has ", len(motors_8_value))
         return [motors_8_value[0], 
                 motors_8_value[1], 
-                -motors_8_value[0], 
+                -motors_8_value[0],
                 -motors_8_value[1],
 
                 motors_8_value[2],
@@ -678,11 +681,12 @@ class Rabbit:
 
 
 
-    def reset(self):
+    def reset(self, orientation=0):
         """Reset the robot to the initial position
         """
         self.lifetime = 0
-        p.resetBasePositionAndOrientation(self._id, self.init_pos, [0, 0, 0, 1])
+        orn_orientation = p.getQuaternionFromEuler([0, 0, orientation])
+        p.resetBasePositionAndOrientation(self._id, self.init_pos, orn_orientation)
 
         for i in range(self.numJoints):
             p.resetJointState(self._id, i, 0, 0)

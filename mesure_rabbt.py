@@ -81,7 +81,7 @@ def get_measuredRabbit(rabbit_type,
             # Record the data at each simulation step
             #print(f"Send Data to GUI ")
             current_time = self.get_lifetime()
-            if current_time - self.last_send_time >= 0.05:  # Check if 10ms have passed
+            if current_time == 0 or current_time - self.last_send_time >= 0.05:  # Check if 10ms have passed
                 self.last_send_time = current_time
                 self.send_data_to_gui([current_time, self.getBodyData_func(), self.getServoData_func()])
 

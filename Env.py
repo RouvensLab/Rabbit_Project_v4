@@ -33,7 +33,7 @@ class Simulation:
         if rabbit_type == "Rabbit_v3":
             from Objects.Rabbit_v3 import Rabbit
             self.rabbit = Rabbit([0, 0, 0.15])
-            self.rabbit.simplify_collision(self.ground._id)
+            #self.rabbit.simplify_collision(self.ground._id)
 
         elif rabbit_type == "Rabbit_v3_mesured":
             from Objects.Rabbit_v3 import Rabbit
@@ -41,7 +41,7 @@ class Simulation:
             self.rabbit = get_measuredRabbit(Rabbit,
                                             state_types_body=["head_orientation", "head_angular_velocity", "head_linear_acceleration" ], 
                                             state_types_servos=["joint_angles", "joint_velocities", "joint_torques"], 
-                                            trajectory_data_structure= ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "component_coordinates_world"]
+                                            trajectory_data_structure= ["base_position", "base_orientation", "base_linear_velocity", "base_angular_velocity", "joint_angles", "joint_torques", "joint_velocities", "component_coordinates_world", "action"]
                                              )([0, 0, 0.15])
         elif rabbit_type == "Rabbit_real_mesured":
             from Real_robot.real_rabbit import Rabbit_real
@@ -135,7 +135,7 @@ class Simulation:
         if self.simulationSpeed == "human":
             self.time_interval.wait_for_step(self.simulation_Timestep)
 
-    def reset(self, seed, reset_gravity_direction=False, reset_terrain=False):
+    def reset(self, seed, reset_gravity_direction=False, reset_terrain=False, rabbit_orientation=0):
         if reset_terrain:
             #self.ground.reset()
             pass
@@ -158,7 +158,7 @@ class Simulation:
             p.setGravity(*gravity_direction)
 
         if self.rabbit is not None:
-            self.rabbit.reset()
+            self.rabbit.reset(rabbit_orientation)
 
     def close(self):
         if self.connection_id is not None:
@@ -181,11 +181,11 @@ if __name__ == "__main__":
 
     #env.rabbit.set_new_mass()
     #env.rabbit.create_seperate_Window()
-    #env.show_world_coordinate_system()
+    env.show_world_coordinate_system()
     #env.rabbit.add_UserControlPanel(all_joints=False)
-    #env.rabbit.get_link_infos()
+    env.rabbit.get_link_infos()
     #env.rabbit.show_center_of_mass()
-    #time.sleep(10000)
+    time.sleep(10000)
     # funktion = env.rabbit.create_get_informations(["joint_angles"])
     # env.rabbit.servoControler.set_torque_state(7, True)
     # env.rabbit.send_goal_pose([0, 0, 0, 0, 0, 0, 0, 0])

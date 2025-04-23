@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
 
     alg_name = "SAC"
-    ModellName = "Disney_Imitation_v18"
+    ModellName = "Disney_Imitation_v23"
     main_dir = r"Models\\" + alg_name + ModellName
     models_dir = os.path.join(main_dir, "models")
     logdir = models_dir+"\\logs"
@@ -72,69 +72,76 @@ if __name__ == "__main__":
         "observation_type_stacked": ["head_orientation", "head_linear_acceleration", "joint_torques"],
         "observation_type_solo": ["phase_signal", "last_action", "User_command"],
         "observation_noise": 0.02,
-        "Horizon_Length": False,
+        "Horizon_Length": True,
         "obs_time_space": 0.5,
         "n_stack": 2,
         "simulation_Timestep": 0.2,
         "terrain_type": "flat",
         "different_terrain": False,
-        "different_gravity": False,
-        "apply_random_push_freq": 0,
-        "recorded_movement_file_path_dic": {
-                                                # "Expert0_0_v7": 1,
-                                                "Expert0_8_v1": 5,
-                                                # "Expert0_8_v2": 5,
-                                                # "Expert0_8_v3": 5,
-                                                # "Expert0_8_v4": 3,
-                                                # "Expert0_8_v5": 3,
-                                                # "Expert0_8_v6": 3,
+        "different_gravity": True,
+        "apply_random_push_freq": 25,
+        "recorded_movement_file_path_dic": {    "ExpertStand_v1": 1,
+                                                "ExpertForward_v1": 5,
+                                                "ExpertForward_v2": 4,
+                                                "ExpertForward_v3": 4,
+                                                # "ExpertForward_v4": 3,
+                                                # "ExpertForward_v5": 3,
+                                                # "ExpertForward_v6": 3,
+                                                # "ExpertForward_v7": 3,
+                                                # "ExpertForward_v8": 3,
+                                                # "ExpertForward_v9": 3,
+                                                "ExpertForward_v10": 4,
 
                                              },
-        "recorded_movement_file_settings": {
-                                                # "Expert0_0_v7": [0],
-                                                "Expert0_8_v1": [0.8],
-                                                # "Expert0_8_v2": [0.8],
-                                                # "Expert0_8_v3": [0.8],
-                                                # "Expert0_8_v4": [0.8],
-                                                # "Expert0_8_v5": [0.8],
-                                                # "Expert0_8_v6": [0.8],
+        "recorded_movement_file_settings": {    "ExpertStand_v1": [0],
+                                                "ExpertForward_v1": [0.8],
+                                                "ExpertForward_v2": [0.8],
+                                                "ExpertForward_v3": [0.8],
+                                                # "ExpertForward_v4": [0.8],
+                                                # "ExpertForward_v5": [0.8],
+                                                # "ExpertForward_v6": [0.8],
+                                                # "ExpertForward_v7": [0.8],
+                                                # "ExpertForward_v8": [0.8],
+                                                # "ExpertForward_v9": [0.8],
+                                                "ExpertForward_v10": [0.8],
         },
         "reward_weights": {
                     # Imitation
-                    "torso_pos": 0,
-                    "torso_orient": 0,
-                    "linear_vel_xy": 0,
-                    "linear_vel_z": 0,
-                    "angular_vel_xy": 0,
-                    "angular_vel_z": 0,
-                    "LegJoint_pos": 0.5,
-                    "LegJoint_vel": 0.05,
-                    "component_coordinates_world": 0,
+                    "torso_pos": 0.25,
+                    "torso_orient": 0.5,
+                    "linear_vel_xy": 0.1,
+                    "linear_vel_z": 0.05,
+                    "angular_vel_xy": 0.05,
+                    "angular_vel_z": 0.1,
+                    "LegJoint_pos": 0.25,
+                    "LegJoint_vel": 0.15,
+                    "component_coordinates_world": 0.25,
                     #"Contact": 1.0,
+                    "action": 0.7,
 
                     # Regularization
                     "Joint_torques": 0.05,
                     "Joint_acc": 0.05,
-                    "action_rate": 0.05,
-                    "action_acc": 0.01,
+                    "action_rate": 0.2,
+                    "action_acc": 0.15,
 
                     # Survival
-                    "survival": 0.1,
+                    "survival": 0.8,
                 }
     }
 
     if alg_name == "SAC":
         # One episode consists of 110 steps, and there are 25 environments
         hyper_params = {
-            "learning_rate": 2e-4,  # A common starting point for SAC
-            "batch_size": 256,  # A reasonable batch size for SAC
-            "buffer_size": 1_000_000,  # Large enough to store experience from multiple environments
+            "learning_rate": 5e-5,  # A common starting point for SAC
+            "batch_size": 3000,  # A reasonable batch size for SAC
+            "buffer_size": 800_000,  # Large enough to store experience from multiple environments
             "policy_kwargs": dict(net_arch=dict(pi=[512, 256], qf=[512, 256])),  # Standard network architecture
-            "gamma": 0.99,  # Discount factor, typically close to 1 for long-term rewards
+            "gamma": 0.96,  # Discount factor, typically close to 1 for long-term rewards
             "train_freq": 1,  # Train the policy every step
             "gradient_steps": 1,  # Perform one gradient step per training step
             "ent_coef": "auto",  # Automatically tune the entropy coefficient
-            "learning_starts": 10_000,  # Start learning after collecting some experience
+            "learning_starts": 1,  # Start learning after collecting some experience
             "target_entropy": "auto",  # Automatically set target entropy
         }
 
@@ -158,7 +165,7 @@ if __name__ == "__main__":
     if not show_last_results:
 
         # Make multiprocess env
-        num_cpu = 25 # Adjust the number of CPUs based on your machine
+        num_cpu = 20 # Adjust the number of CPUs based on your machine
         envs = SubprocVecEnv([make_env(i, env_param_kwargs=env_param_kwargs) for i in range(num_cpu)])
 
         #creates a documentation of the model hyperparameter, the environements parameter and other information concearned to the training, in the Model directory.
@@ -209,7 +216,7 @@ if __name__ == "__main__":
             #             **hyper_params
             #             )
             #load trained SAC policy
-            model = SAC.load(r"Models\SACDisney_Imitation_SteadyStand_v1\models\rl_model_1250000_steps.zip", env=envs, tensorboard_log=logdir)
+            model = SAC.load(r"Models\SACDisney_Imitation_v22\models\rl_model_2500000_steps.zip", env=envs, tensorboard_log=logdir)
 
         elif alg_name == "PPO":
             from stable_baselines3 import PPO

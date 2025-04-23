@@ -280,8 +280,8 @@ class Rabbit_real:
         servo_positions[5] = math.pi - self.InverseKinematics(servo_positions[5], servo_positions[4])
 
         #transform the spine joint angles
-        servo_positions[0] = np.clip(pose_positions[1]*45+pose_positions[0]*-40, -50, 10)/180*math.pi
-        servo_positions[1] = np.clip(pose_positions[1]*-45+pose_positions[0]*-40, -50, 10)/180*math.pi
+        servo_positions[0] = np.clip(-pose_positions[1]*45+pose_positions[0]*-40, -50, 10)/180*math.pi
+        servo_positions[1] = np.clip(-pose_positions[1]*-45+pose_positions[0]*-40, -50, 10)/180*math.pi
         servo_positions = np.array(servo_positions)+np.array(self.Joint_correction)*math.pi
         self.send_motor_commands(servo_positions)
 
